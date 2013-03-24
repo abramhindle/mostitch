@@ -1,20 +1,44 @@
 #!/usr/bin/env python
-"""Originally from in_out.pya
-   Assume GPL2
 """
-"""a quick hack to demonstrate getting data between python and
-   marsyas. """
+Mostitch is Marsyas Ostitch. 
+
+Ostitch was an audio collager. An audio collager takes input source
+audio and produces output source audio which is composed of chunks of
+the input. The output is usually is meant to mimic another signal
+(like a song or speech).
+
+   Originally from in_out.py
+   (C) 2013 Graham Percival
+   a quick hack to demonstrate getting data between python and
+   marsyas. 
+
+Copyright (C) 2013 Abram Hindle, Marsyas authors for in_out.py
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""
 
 import sys
 import numpy
-import pylab
+#import pylab
 import marsyas
 import marsyas_util
 import pdb
 import pyflann
 from pyflann import *
 from numpy import *
-from numpy.random import *
+#from numpy.random import *
 import cPickle
 import random
 
