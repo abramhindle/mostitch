@@ -12,16 +12,19 @@ import pylab
 import marsyas
 import marsyas_util
 import pdb
+import pyflann
 from pyflann import *
 from numpy import *
 from numpy.random import *
 import cPickle
+import random
 
 #PLOT = True
 PLOT = False
+pyflann.set_distance_type('kl')
 flann = FLANN()
 topn = 20
-buffsize = 1024
+buffsize = 512
 
 texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Series/lspbranch" ,"Series/lpccbranch" ,"MFCC/mfcc" ,"SCF/scf" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd" ,"Series/chromaPrSeries"]
 detectors = ["Fanout/detectors", texture]
@@ -104,6 +107,11 @@ class StreamMetricExtractor(MetricExtractor):
     def get_source(self):
         return "AudioSource/src"
 
+    def post_network_setup(self):
+        self.input_net.updControl("mrs_natural/inSamples", buffsize)
+        self.input_net.updControl("mrs_real/israte", 44100.0)
+	self.input_net.updControl(self.get_source() + "/mrs_bool/initAudio", marsyas.MarControlPtr.from_bool(True));
+
     def callback( self, input_net_end, stats):
 	stats = [x for x in stats]
 	rv = input_net_end.getSubVector(0,len(input_net_end))
@@ -115,38 +123,15 @@ class StreamMetricExtractor(MetricExtractor):
         return self.slices
     
 
-
 def read_in_file_with_stats(filename_input):
     fm = FileMetricExtractor( filename_input )
     fm.readeverything()
     return fm.get_slices()
-    # and this was the old code!
-    series = ["Series/input", ["SoundFileSource/src", detectors]]
-    this_net = marsyas_util.create( series )
-    this_net.updControl(
-        "SoundFileSource/src/mrs_string/filename",
-        filename_input)
-    input_net = this_net
-    notempty = input_net.getControl("SoundFileSource/src/mrs_bool/hasData")
-    input_net_end_control = input_net.getControl("SoundFileSource/src/mrs_realvec/processedData")
-    metrics_control = input_net.getControl("mrs_realvec/processedData")
-    input_net.tick()
-    # is this a copy
-    input_net_end = input_net_end_control.to_realvec()
-    slices = []
-    while notempty.to_bool():
-        input_net.tick()
-        input_net_end = input_net_end_control.to_realvec()
-        stats = metrics_control.to_realvec()
-	print stats[0]
-        #pdb.set_trace()
-	stats = [x for x in stats]
-	rv = input_net_end.getSubVector(0,len(input_net_end))
-        slices.append( Slice( rv, stats ) )
-    return slices  
 
 def make_input():
     series = ["Series/input", ["AudioSource/src",detectors]]
+    this_net.updControl("mrs_natural/inSamples", buffsize)
+    this_net.updControl("mrs_real/israte", 44100.0)
     this_net = marsyas_util.create(series)
     return this_net
 
@@ -156,9 +141,8 @@ def make_output():
     this_net = marsyas_util.create(series)
     this_net.updControl("mrs_natural/inSamples", buffsize)
     this_net.updControl("mrs_real/israte", 44100.0)
+    this_net.updControl("AudioSink/dest/mrs_bool/initAudio",marsyas.MarControlPtr.from_bool(True))
     return this_net
-
-
 
 def main():
     try:    
@@ -166,34 +150,55 @@ def main():
     except:
         print "USAGE: ./mostitch.py input_filename.wav"
         exit(1)
+
+    # make sure we can get the sound card!
+
     # read the slices
     slices = read_in_file_with_stats( filename_input )
     print(len(slices))
     # get NN
-    #pdb.set_trace()
     dataset = array([s.stats for s in slices])
-    params = flann.build_index(dataset, algorithm="autotuned", target_precision=0.9, log_level = "info")
-    i = 0
-    for slice in slices:
-        testset = [slice.stats]
-        results, dists = flann.nn_index(array(testset),topn, checks=params["checks"]);
-        for result in results:
-	    print str(i) + "\t" + ",".join( [str(r) for r in result] )
-        i = i + 1
+    #params = flann.build_index(dataset, algorithm="autotuned", target_precision=0.9, log_level = "info")
+    params = flann.build_index(dataset, algorithm="kdtree", target_precision=0.9, log_level = "info")
+    #i = 0
+    #for slice in slices:
+    #    testset = [slice.stats]
+    #    results, dists = flann.nn_index(array(testset),topn, checks=params["checks"]);
+    #    for result in results:
+    #        print str(i) + "\t" + ",".join( [str(r) for r in result] )
+    #    i = i + 1
     #output series and tick
+    #output_net = make_output()
+    #output_net_begin_control = output_net.getControl(
+    #    "RealvecSource/real_src/mrs_realvec/data")
+    #output_net_begin = marsyas.realvec(buffsize)
+    #sme = StreamMetricExtractor()
+    
+    
     output_net = make_output()
     output_net_begin_control = output_net.getControl(
         "RealvecSource/real_src/mrs_realvec/data")
     output_net_begin = marsyas.realvec(buffsize)
+
+    # 1 play through
+    #for play_slice in slices:
+    #    output_net_begin_control.setValue_realvec(play_slice.rv)
+    #    output_net.tick()
+
+
     sme = StreamMetricExtractor()
+    
+
+    
     while sme.has_data():
         # tick is done here
         new_slice = sme.operate()
         results, dists = flann.nn_index(array([new_slice.stats]),topn, checks=params["checks"]);
         result = results[0]
-        choice = result[random.randint(1,len(results)-1)]
-        print new_slice.str
-        print ",".join([str(x) for x in results])
+        c = 1+int((len(result)-2)*random.betavariate(1,3))
+        choice = result[ c ] #random.randint(1,len(result)-1)]
+        print new_slice.str()
+        print ",".join([str(x) for x in result])
         print(choice)
         play_slice = slices[choice]        
         output_net_begin_control.setValue_realvec(play_slice.rv)
@@ -201,43 +206,6 @@ def main():
 
 #        for slice in slices:
 #        print len(slice.rv)
-
-def oldmain():
-    try:    
-        filename_input = sys.argv[1]
-        filename_output = sys.argv[2]
-    except:
-        print "USAGE: ./in_out.py input_filename.wav output_filename.wav"
-        exit(1)
-    
-    input_net = make_input(filename_input)
-    output_net = make_output(filename_output)
-
-    notempty = input_net.getControl("SoundFileSource/src/mrs_bool/hasData")
-    input_net_end_control = input_net.getControl("mrs_realvec/processedData")
-    output_net_begin_control = output_net.getControl(
-        "RealvecSource/real_src/mrs_realvec/data")
-    output_net_begin = marsyas.realvec(buffsize)
-    while notempty.to_bool():
-        ### get input data
-        input_net.tick()
-        input_net_end = input_net_end_control.to_realvec()
-
-        ### do something with it
-	print input_net_end.getSize()
-        for i in range(input_net_end.getSize()):
-            output_net_begin[i] = 0.5*input_net_end[i]
-	print ",".join([str(input_net_end) for x in input_net_end])
-        output_net_begin_control.setValue_realvec(output_net_begin)
-        if PLOT:
-            pylab.plot(input_net_end, label="input")
-            pylab.plot(output_net_begin, label="output")
-            pylab.legend()
-            pylab.show()
-
-        ### set output data
-        output_net.tick()
-
 
 main()
 
