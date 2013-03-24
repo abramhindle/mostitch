@@ -1,0 +1,47 @@
+== Mostitch ==
+
+Mostitch is Marsyas Ostitch. 
+
+Ostitch was an audio collager. An audio collager takes input source
+audio and produces output source audio which is composed of chunks of
+the input. The output is usually is meant to mimic another signal
+(like a song or speech).
+
+http://churchturing.org/ostitch/
+
+Mostitch is the Marsyas port of Ostitch.
+
+This version seeks
+
+== Motivation ==
+
+While I do enjoy OCaml, I also enjoy very fast turn around on musical
+ideas, as well as I do not enjoy rewriting code. Marsyas is very slick
+and full of great code not found in CSound and other applications I
+like to use.
+
+== TODO ==
+
+* [ ] Expose the index addPoint to the pyflann implementation so we can dynamically add points on
+      the fly
+* [ ] Granular Synthesis
+* [ ] Windowing Samples
+* [ ] Larger input samples than output samples
+
+== License ==
+
+Copyright (C) 2013 Abram Hindle
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
