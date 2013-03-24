@@ -15,6 +15,7 @@ import pdb
 from pyflann import *
 from numpy import *
 from numpy.random import *
+import cPickle
 
 #PLOT = True
 PLOT = False
@@ -35,6 +36,8 @@ class Slice:
         return self.stats
     def rv(self):
         return self.rv
+    def str(self):
+        return "Slice:"+",".join([str(x) for x in self.stats])
     
 class MetricExtractor:
     # override this with your source
@@ -184,11 +187,15 @@ def main():
     output_net_begin = marsyas.realvec(buffsize)
     sme = StreamMetricExtractor()
     while sme.has_data():
+        # tick is done here
         new_slice = sme.operate()
         results, dists = flann.nn_index(array([new_slice.stats]),topn, checks=params["checks"]);
         result = results[0]
-        first = r[1]
-        play_slice = slices[first]        
+        choice = result[random.randint(1,len(results)-1)]
+        print new_slice.str
+        print ",".join([str(x) for x in results])
+        print(choice)
+        play_slice = slices[choice]        
         output_net_begin_control.setValue_realvec(play_slice.rv)
         output_net.tick()
 
