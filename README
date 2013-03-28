@@ -20,6 +20,13 @@ ideas, as well as I do not enjoy rewriting code. Marsyas is very slick
 and full of great code not found in CSound and other applications I
 like to use.
 
+== Requirements ==
+
+Get Marsyas http://marsyasweb.appspot.com/ and install the python bindings.
+
+Get pyflann http://people.cs.ubc.ca/~mariusm/index.php/FLANN/FLANN install flann
+ and install the python bindings. https://github.com/mariusmuja/flann git://github.com/mariusmuja/flann.git
+
 == TODO ==
 
 * [ ] Expose the index addPoint to the pyflann implementation so we can dynamically add points on

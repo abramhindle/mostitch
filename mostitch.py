@@ -52,6 +52,9 @@ buffsize = 512
 texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Series/lspbranch" ,"Series/lpccbranch" ,"MFCC/mfcc" ,"SCF/scf" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd" ,"Series/chromaPrSeries"]
 detectors = ["Fanout/detectors", texture]
 
+grainuri = "RealvecGrainSource/real_src"
+
+
 class Slice:
     stats = []
     rv = 0
@@ -139,11 +142,11 @@ class StreamMetricExtractor(MetricExtractor):
 	stats = [x for x in stats]
 	rv = input_net_end.getSubVector(0,len(input_net_end))
         s = Slice( rv, stats )
-        self.slices.append( s )
+        #self.slices.append( s )
         return s
         
-    def get_slices( self ):
-        return self.slices
+    #def get_slices( self ):
+    #    return self.slices
     
 def read_in_file_with_stats(filename_input):
     fm = FileMetricExtractor( filename_input )
@@ -151,8 +154,9 @@ def read_in_file_with_stats(filename_input):
     return fm.get_slices()
 
 def make_output():
-    series = ["Series/output", ["RealvecSource/real_src",
-        "AudioSink/dest"]]
+    series = ["Series/output", 
+              ["RealvecGrainSource/real_src",
+               "AudioSink/dest"]]
     this_net = marsyas_util.create(series)
     this_net.updControl("mrs_natural/inSamples", buffsize)
     this_net.updControl("mrs_real/israte", 44100.0)
@@ -164,37 +168,85 @@ def play_slices(slices, output_net_begin_control, output_net):
         output_net_begin_control.setValue_realvec(play_slice.rv)
         output_net.tick()
 
+def load_slice( net, id, slice ):
+    net.updControl(grainuri + "/mrs_natural/index", id)
+    net.updControl(grainuri + "/mrs_natural/index", id)
+    data_uri = grainuri + "/mrs_realvec/data"
+    control = net.getControl(data_uri)
+    control.setValue_realvec(slice.rv)
+    net.updControl(grainuri + "/mrs_bool/commit",
+                   marsyas.MarControlPtr.from_bool(True))
+
+def triangle( size ):
+    v = marsyas.realvec( size )
+    for i in range(0,size/2):
+        v[i] = i/(size/2)
+    for i in range(size/2,size):
+        v[i] = ((size/2) - (i - size/2))/(size/2)
+    return v
+
+def saw(size):
+    v = marsyas.realvec( size )
+    for i in range(0,size):
+        v[i] = i/(size)
+    return v
+
+def flat(size):
+    v = marsyas.realvec( size )
+    for i in range(0,size):
+        v[i] = 1
+    return v
+
 def main():
     try:    
         filename_input = sys.argv[1]
     except:
         print "USAGE: ./mostitch.py input_filename.wav"
         exit(1)
-    # read the slices
+    # read the slices    
     slices = read_in_file_with_stats( filename_input )
     print(len(slices))
     # get NN
     dataset = array([s.stats for s in slices])
+    window = flat(buffsize)#saw(buffsize)#triangle(buffsize) #flat(buffsize) #triangle(buffsize)
+    for slice in slices:
+        slice.rv *= window
     #params = flann.build_index(dataset, algorithm="autotuned", target_precision=0.9, log_level = "info")
     params = flann.build_index(dataset, algorithm="kdtree", target_precision=0.9, log_level = "info")
     output_net = make_output()
-    output_net_begin_control = output_net.getControl(
-        "RealvecSource/real_src/mrs_realvec/data")
-    output_net_begin = marsyas.realvec(buffsize)
+    slicecnt = 0
+    for slice in slices:
+        load_slice( output_net, slicecnt, slice )
+        slicecnt += 1
+
     sme = StreamMetricExtractor()
+    schedule_control = output_net.getControl(
+        grainuri + "/mrs_realvec/schedule")
+    schedsize = 3 # size of a schedule
     while sme.has_data():
         # tick is done here
         new_slice = sme.operate()
         results, dists = flann.nn_index(array([new_slice.stats]),topn, checks=params["checks"]);
         result = results[0]
-        # beta is skewed, so it stays pretty low
-        c = 1+int((len(result)-2)*random.betavariate(1,3))
-        choice = result[ c ] #random.randint(1,len(result)-1)]
+        # here's the granular part
+        ngrains = random.randint(1,1000)
+        schedule = marsyas.realvec(schedsize * ngrains)
+        for j in range(0,ngrains):
+            # in the next 10th of a second
+            schedule[j*schedsize + 0] = random.randint(0,buffsize*2)#44100/10)
+            # beta is skewed, so it stays pretty low
+            c = 1+int((len(result)-2)*random.betavariate(1,3))
+            choice = int(result[ c ])
+            schedule[j*schedsize + 1] = choice # choose the slice
+            schedule[j*schedsize + 2] = 0.01
         print new_slice.str()
         print ",".join([str(x) for x in result])
         print(choice)
-        play_slice = slices[choice]        
-        output_net_begin_control.setValue_realvec(play_slice.rv)
+        #play_slice = slices[choice]
+        schedule_control.setValue_realvec(schedule)
+        output_net.updControl(grainuri + "/mrs_bool/schedcommit",
+                              marsyas.MarControlPtr.from_bool(True))
+        #output_net_begin_control.setValue_realvec(play_slice.rv)
         output_net.tick()
 
 main()
