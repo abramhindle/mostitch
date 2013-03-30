@@ -32,6 +32,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 import sys
 import numpy
 #import pylab
+from marsyas import * 
 import marsyas
 import marsyas_util
 import pdb
@@ -119,6 +120,7 @@ class FileMetricExtractor(MetricExtractor):
         self.input_net.updControl(
             "SoundFileSource/src/mrs_string/filename",
             self.filename_input)
+        self.input_net.updControl("mrs_natural/inSamples", buffsize)
 
     def callback( self, input_net_end, stats):
 	stats = [x for x in stats]
@@ -160,9 +162,13 @@ def make_output():
     series = ["Series/output", 
               ["RealvecGrainSource/real_src",
                "AudioSink/dest"]]
+    #           "SoundFileSink/dest"]]
     this_net = marsyas_util.create(series)
     this_net.updControl("mrs_natural/inSamples", buffsize)
     this_net.updControl("mrs_real/israte", 44100.0)
+    #this_net.updControl(
+    #    "SoundFileSink/dest/mrs_string/filename",
+    #    "out.wav")
     this_net.updControl("AudioSink/dest/mrs_bool/initAudio",marsyas.MarControlPtr.from_bool(True))
     return this_net
 
@@ -216,7 +222,7 @@ def main():
         exit(1)
     # read the slices    
     slices = read_in_file_with_stats( filename_input )
-    print(len(slices))
+    #    print(len(slices))
     # get NN
     dataset = array([s.stats for s in slices])
     #window = triangle(buffsize)
@@ -225,6 +231,7 @@ def main():
     #flat(buffsize)#saw(buffsize)#triangle(buffsize) #flat(buffsize) #triangle(buffsize)
     for slice in slices:
         slice.rv *= window
+    #print ",".join([str(x) for x in slices[1000].rv])
     #params = flann.build_index(dataset, algorithm="autotuned", target_precision=0.9, log_level = "info")
     params = flann.build_index(dataset, algorithm="kdtree", target_precision=0.9, log_level = "info")
     output_net = make_output()
@@ -237,6 +244,7 @@ def main():
     schedule_control = output_net.getControl(
         grainuri + "/mrs_realvec/schedule")
     schedsize = 3 # size of a schedule
+    nn = schedsize
     while sme.has_data():
         # tick is done here
         new_slice = sme.operate()
@@ -248,24 +256,30 @@ def main():
         schedule = marsyas.realvec(schedsize * ngrains)
         for j in range(0,ngrains):
             # in the next 10th of a second
-            schedule[j*schedsize + 0] = random.randint(0,buffsize)#44100/10)
+            schedule[j*schedsize + 0] = random.randint(0,44100/10)#44100/10)
             # beta is skewed, so it stays pretty low
-            # c = 1+int((len(result)-2)*random.betavariate(1,3))
-            #c = 0#int((len(result)-2)*random.betavariate(1,3))
+            #c = random.randint(0,len(result)-1)#int((len(result)-2)*random.betavariate(1,3))
+            c = 0#int((len(result)-2)*random.betavariate(1,3))
             #c = 0#int((len(result)-1)*random.betavariate(1,3))
-            c = random.randint(0,4)
+            #c = random.randint(0,4)
             choice = int(result[ c ])
             schedule[j*schedsize + 1] = choice # choose the slice
-            schedule[j*schedsize + 2] = 0.05
-        print new_slice.str()
-        print ",".join([str(x) for x in result])
-        print(choice)
-        #play_slice = slices[choice]
-        schedule_control.setValue_realvec(schedule)
-        output_net.updControl(grainuri + "/mrs_bool/schedcommit",
-                              marsyas.MarControlPtr.from_bool(True))
-        #output_net_begin_control.setValue_realvec(play_slice.rv)
-        output_net.tick()
+            amp = random.random() * 0.2
+            depth = 512*(choice-1)/44100.0
+            schedule[j*schedsize + 2] = amp
+            dur = buffsize/44100.0
+            when = (schedule[j*schedsize + 0])/44100.0
+            print "i1 %f %f %f %f %d"%(when,dur,amp,depth,choice)
+        #print new_slice.str()
+        #print ",".join([str(x) for x in result])
+        #print(choice)
+        
+        #schedule_control = output_net.getControl(
+        #    grainuri + "/mrs_realvec/schedule")
+        #schedule_control.setValue_realvec(schedule)
+        #output_net.updControl(grainuri + "/mrs_bool/schedcommit",
+        #                      marsyas.MarControlPtr.from_bool(True))
+        #output_net.tick()
 
 main()
 
