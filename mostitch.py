@@ -49,6 +49,7 @@ pyflann.set_distance_type('kl')
 flann = FLANN()
 topn = 20
 buffsize = 2048
+learning = True
 
 #texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Series/lspbranch" ,"Series/lpccbranch" ,"MFCC/mfcc" ,"SCF/scf" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd" ,"Series/chromaPrSeries"]
 texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd","AbsMax/abs","Energy/energy"]
@@ -250,8 +251,13 @@ def main():
         new_slice = sme.operate()
         results, dists = flann.nn_index(array([new_slice.stats]),topn, checks=params["checks"]);
         result = results[0]
+        if (learning):
+            slices.append(new_slice)
+            flann.add_points(array([new_slice.stats]))
+            slicecnt = len(slices)
+            load_slice( output_net, slicecnt, new_slice )
         # here's the granular part
-        ngrains = random.randint(10,100)
+        ngrains = random.randint(10,1000)
         # ngrains = 1
         schedule = marsyas.realvec(schedsize * ngrains)
         for j in range(0,ngrains):
