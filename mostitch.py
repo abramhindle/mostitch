@@ -49,15 +49,42 @@ pyflann.set_distance_type('kl')
 flann = FLANN()
 topn = 20
 buffsize = 2048
-learning = True
+buffsize = 1024
+learning = False#True#False
+csound = False
 
 #texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Series/lspbranch" ,"Series/lpccbranch" ,"MFCC/mfcc" ,"SCF/scf" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd" ,"Series/chromaPrSeries"]
-texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd","AbsMax/abs","Energy/energy"]
+# texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd","AbsMax/abs","Energy/energy","MeanAbsoluteDeviation/mad","TimbreFeatures/featExtractor"]
+#texture = ["TimbreFeatures/featExtractor"]
+
 
 #"AimGammatone/aimgamma"]
-detectors = ["Fanout/detectors", texture]
+# detectors = ["Fanout/detectors", texture]
+detectors = ["TimbreFeatures/featExtractor","TextureStats/tStats"]
 
 grainuri = "RealvecGrainSource/real_src"
+
+def setup_timbre( net ):
+    net.updControl("TimbreFeatures/featExtractor/mrs_string/enableTDChild",
+        marsyas.MarControlPtr.from_string("ZeroCrossings/zcrs"))
+    net.updControl("TimbreFeatures/featExtractor/mrs_string/enableLPCChild",
+        marsyas.MarControlPtr.from_string("Series/lspbranch"))
+    net.updControl("TimbreFeatures/featExtractor/mrs_string/enableLPCChild",
+        marsyas.MarControlPtr.from_string("Series/lpccbranch"))
+    net.updControl("TimbreFeatures/featExtractor/mrs_string/enableSPChild",
+        marsyas.MarControlPtr.from_string("MFCC/mfcc"))
+    net.updControl("TimbreFeatures/featExtractor/mrs_string/enableSPChild",
+        marsyas.MarControlPtr.from_string("SCF/scf"))
+    net.updControl("TimbreFeatures/featExtractor/mrs_string/enableSPChild",
+        marsyas.MarControlPtr.from_string("Rolloff/rf"))
+    net.updControl("TimbreFeatures/featExtractor/mrs_string/enableSPChild",
+        marsyas.MarControlPtr.from_string("Flux/flux"))
+    net.updControl("TimbreFeatures/featExtractor/mrs_string/enableSPChild",
+        marsyas.MarControlPtr.from_string("Centroid/cntrd"))
+    net.updControl("TimbreFeatures/featExtractor/mrs_string/enableSPChild",
+        marsyas.MarControlPtr.from_string("Series/chromaPrSeries"))
+
+
 
 
 class Slice:
@@ -87,8 +114,9 @@ class MetricExtractor:
         return 0
 
     def setup( self ):
-        series = ["Series/input", [self.get_source(), detectors]]
+        series = ["Series/input", [self.get_source()] + detectors]
         self.input_net = marsyas_util.create( series )
+        setup_timbre( self.input_net )
         # override
         self.post_network_setup()
         self.notempty = self.input_net.getControl(self.get_source() + "/mrs_bool/hasData")
@@ -170,8 +198,11 @@ def make_output():
     #this_net.updControl(
     #    "SoundFileSink/dest/mrs_string/filename",
     #    "out.wav")
-    this_net.updControl("AudioSink/dest/mrs_bool/initAudio",marsyas.MarControlPtr.from_bool(True))
+    #
     return this_net
+
+def init_audio_out( this_net ):
+    this_net.updControl("AudioSink/dest/mrs_bool/initAudio",marsyas.MarControlPtr.from_bool(True))
 
 def play_slices(slices, output_net_begin_control, output_net):
     for play_slice in slices:
@@ -215,6 +246,28 @@ def flat(size):
         v[i] = 1
     return v
 
+def printlist( l ):
+    print ",".join([str(x) for x in l])
+
+choices = {}
+def chooser( results ):
+    l = len(results)
+    ramp = [1 - 1.0*i/l for i in (range(0,l))]
+    printlist(ramp)
+    framp = [1/(1.0+choices.get(int(x),0)) for x in results]
+    printlist(framp)
+    cramp = [ramp[i] * framp[i] for i in range(0,l)]
+    printlist(cramp)
+    cramp[int((l-1)*random.betavariate(1,3))] *= 100
+    cramp[int((l-1)*random.betavariate(1,3))] *= 100
+    cramp[int((l-1)*random.betavariate(1,3))] *= 100
+    myi = cramp.index(max(cramp))
+    choice = int(results[myi])
+    choices[choice] = choices.get(choice,0) + 1
+    print "Choice:%d Myi:%d" % (choice, myi)
+    return choice
+
+
 def main():
     try:    
         filename_input = sys.argv[1]
@@ -242,6 +295,7 @@ def main():
         slicecnt += 1
 
     sme = StreamMetricExtractor()
+    init_audio_out( output_net )
     schedule_control = output_net.getControl(
         grainuri + "/mrs_realvec/schedule")
     schedsize = 3 # size of a schedule
@@ -262,20 +316,25 @@ def main():
         schedule = marsyas.realvec(schedsize * ngrains)
         for j in range(0,ngrains):
             # in the next 10th of a second
-            schedule[j*schedsize + 0] = random.randint(0,44100/10)#44100/10)
+            schedule[j*schedsize + 0] = random.randint(0,buffsize*3)#44100/10)
             # beta is skewed, so it stays pretty low
             #c = random.randint(0,len(result)-1)#int((len(result)-2)*random.betavariate(1,3))
             #c = 0#int((len(result)-2)*random.betavariate(1,3))
-            #c = int((len(result)-1)*random.betavariate(1,3))
-            c = random.randint(0,len(result)-1)
+            c = int((len(result)-1)*random.betavariate(1,3))
+            #c = random.randint(0,len(result)-1)
+            #if (random.choice([True,False])):
             choice = int(result[ c ]) 
+            #else:
+            #    choice = chooser(result)
+            #print str(choice)
             schedule[j*schedsize + 1] = choice # choose the slice
             amp = random.random() * 0.2
             depth = 512*(choice-1)/44100.0
             schedule[j*schedsize + 2] = amp
             dur = buffsize/44100.0
             when = (schedule[j*schedsize + 0])/44100.0
-            print "i1 %f %f %f %f %d"%(when,dur,amp,depth,choice)
+            if (csound):
+                print "i1 %f %f %f %f %d"%(when,dur,amp,depth,choice)
         #print new_slice.str()
         #print ",".join([str(x) for x in result])
         #print(choice)
