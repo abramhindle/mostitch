@@ -48,7 +48,7 @@ PLOT = False
 pyflann.set_distance_type('kl')
 flann = FLANN()
 topn = 20
-buffsize = 512
+buffsize = 2048
 
 #texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Series/lspbranch" ,"Series/lpccbranch" ,"MFCC/mfcc" ,"SCF/scf" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd" ,"Series/chromaPrSeries"]
 texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd","AbsMax/abs","Energy/energy"]
@@ -259,10 +259,10 @@ def main():
             schedule[j*schedsize + 0] = random.randint(0,44100/10)#44100/10)
             # beta is skewed, so it stays pretty low
             #c = random.randint(0,len(result)-1)#int((len(result)-2)*random.betavariate(1,3))
-            c = 0#int((len(result)-2)*random.betavariate(1,3))
-            #c = 0#int((len(result)-1)*random.betavariate(1,3))
-            #c = random.randint(0,4)
-            choice = int(result[ c ])
+            #c = 0#int((len(result)-2)*random.betavariate(1,3))
+            #c = int((len(result)-1)*random.betavariate(1,3))
+            c = random.randint(0,len(result)-1)
+            choice = int(result[ c ]) 
             schedule[j*schedsize + 1] = choice # choose the slice
             amp = random.random() * 0.2
             depth = 512*(choice-1)/44100.0
@@ -274,12 +274,12 @@ def main():
         #print ",".join([str(x) for x in result])
         #print(choice)
         
-        #schedule_control = output_net.getControl(
-        #    grainuri + "/mrs_realvec/schedule")
-        #schedule_control.setValue_realvec(schedule)
-        #output_net.updControl(grainuri + "/mrs_bool/schedcommit",
-        #                      marsyas.MarControlPtr.from_bool(True))
-        #output_net.tick()
+        schedule_control = output_net.getControl(
+            grainuri + "/mrs_realvec/schedule")
+        schedule_control.setValue_realvec(schedule)
+        output_net.updControl(grainuri + "/mrs_bool/schedcommit",
+                              marsyas.MarControlPtr.from_bool(True))
+        output_net.tick()
 
 main()
 
