@@ -47,9 +47,12 @@ PLOT = False
 pyflann.set_distance_type('kl')
 flann = FLANN()
 topn = 20
-buffsize = 512
+buffsize = 256
 
-texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Series/lspbranch" ,"Series/lpccbranch" ,"MFCC/mfcc" ,"SCF/scf" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd" ,"Series/chromaPrSeries"]
+#texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Series/lspbranch" ,"Series/lpccbranch" ,"MFCC/mfcc" ,"SCF/scf" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd" ,"Series/chromaPrSeries"]
+texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd","AbsMax/abs","Energy/energy"]
+
+#"AimGammatone/aimgamma"]
 detectors = ["Fanout/detectors", texture]
 
 grainuri = "RealvecGrainSource/real_src"
@@ -177,12 +180,20 @@ def load_slice( net, id, slice ):
     net.updControl(grainuri + "/mrs_bool/commit",
                    marsyas.MarControlPtr.from_bool(True))
 
+def hann( n, N ):
+    return 0.5 * (1 - cos( (2 * math.pi * n) / (N - 1)))
+
+def hann_window( size ):
+    v = marsyas.realvec( size )
+    for i in range(0,size):
+        v[i] = hann( i, size)
+    return v
+
 def triangle( size ):
     v = marsyas.realvec( size )
-    for i in range(0,size/2):
-        v[i] = i/(size/2)
-    for i in range(size/2,size):
-        v[i] = ((size/2) - (i - size/2))/(size/2)
+    half = size/2
+    for i in range(0,size):
+        v[i] = 1.0 - abs(half - i)/half
     return v
 
 def saw(size):
@@ -208,7 +219,10 @@ def main():
     print(len(slices))
     # get NN
     dataset = array([s.stats for s in slices])
-    window = flat(buffsize)#saw(buffsize)#triangle(buffsize) #flat(buffsize) #triangle(buffsize)
+    #window = triangle(buffsize)
+    #window = hann_window(buffsize)
+    window = flat(buffsize)
+    #flat(buffsize)#saw(buffsize)#triangle(buffsize) #flat(buffsize) #triangle(buffsize)
     for slice in slices:
         slice.rv *= window
     #params = flann.build_index(dataset, algorithm="autotuned", target_precision=0.9, log_level = "info")
@@ -230,12 +244,15 @@ def main():
         result = results[0]
         # here's the granular part
         ngrains = random.randint(1,1000)
+        # ngrains = 1
         schedule = marsyas.realvec(schedsize * ngrains)
         for j in range(0,ngrains):
             # in the next 10th of a second
             schedule[j*schedsize + 0] = random.randint(0,buffsize*2)#44100/10)
             # beta is skewed, so it stays pretty low
-            c = 1+int((len(result)-2)*random.betavariate(1,3))
+            # c = 1+int((len(result)-2)*random.betavariate(1,3))
+            c = int((len(result)-2)*random.betavariate(1,3))
+            #c = 0#int((len(result)-1)*random.betavariate(1,3))
             choice = int(result[ c ])
             schedule[j*schedsize + 1] = choice # choose the slice
             schedule[j*schedsize + 2] = 0.01
