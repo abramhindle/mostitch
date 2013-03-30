@@ -162,8 +162,7 @@ def make_output():
                "AudioSink/dest"]]
     this_net = marsyas_util.create(series)
     this_net.updControl("mrs_natural/inSamples", buffsize)
-    this_net.updControl("mrs_real/israte", 44100.0)
-    this_net.updControl("AudioSink/dest/mrs_bool/initAudio",marsyas.MarControlPtr.from_bool(True))
+    this_net.updControl("mrs_real/israte", 44100.0)    
     return this_net
 
 def play_slices(slices, output_net_begin_control, output_net):
@@ -228,6 +227,7 @@ def main():
     #params = flann.build_index(dataset, algorithm="autotuned", target_precision=0.9, log_level = "info")
     params = flann.build_index(dataset, algorithm="kdtree", target_precision=0.9, log_level = "info")
     output_net = make_output()
+    this_net = output_net
     slicecnt = 0
     for slice in slices:
         load_slice( output_net, slicecnt, slice )
@@ -237,35 +237,39 @@ def main():
     schedule_control = output_net.getControl(
         grainuri + "/mrs_realvec/schedule")
     schedsize = 3 # size of a schedule
-    while sme.has_data():
-        # tick is done here
-        new_slice = sme.operate()
-        results, dists = flann.nn_index(array([new_slice.stats]),topn, checks=params["checks"]);
-        result = results[0]
-        # here's the granular part
-        ngrains = random.randint(10,100)
-        # ngrains = 1
-        schedule = marsyas.realvec(schedsize * ngrains)
-        for j in range(0,ngrains):
-            # in the next 10th of a second
-            schedule[j*schedsize + 0] = random.randint(0,buffsize)#44100/10)
-            # beta is skewed, so it stays pretty low
-            # c = 1+int((len(result)-2)*random.betavariate(1,3))
-            #c = 0#int((len(result)-2)*random.betavariate(1,3))
-            #c = 0#int((len(result)-1)*random.betavariate(1,3))
-            c = random.randint(0,4)
-            choice = int(result[ c ])
-            schedule[j*schedsize + 1] = choice # choose the slice
-            schedule[j*schedsize + 2] = 0.05
-        print new_slice.str()
-        print ",".join([str(x) for x in result])
-        print(choice)
-        #play_slice = slices[choice]
-        schedule_control.setValue_realvec(schedule)
-        output_net.updControl(grainuri + "/mrs_bool/schedcommit",
-                              marsyas.MarControlPtr.from_bool(True))
-        #output_net_begin_control.setValue_realvec(play_slice.rv)
-        output_net.tick()
+    nn = schedsize
+    i = 0
 
+    this_net.updControl("AudioSink/dest/mrs_bool/initAudio",marsyas.MarControlPtr.from_bool(True))
+    while 1:
+        schedule = marsyas.realvec(nn * buffsize)
+        for j in range(0,buffsize):
+            schedule[j*nn+0] = j
+            schedule[j*nn+1] = j + (i % slicecnt)
+            schedule[j*nn+2] = 0.25
+        # this sets a schedule
+        output_net_begin_control = this_net.getControl("RealvecGrainSource/real_src/mrs_realvec/schedule")
+        output_net_begin_control.setValue_realvec(schedule)
+        # this commits the schedule
+        this_net.updControl("RealvecGrainSource/real_src/mrs_bool/schedcommit",marsyas.MarControlPtr.from_bool(True))
+        print "\t".join([str(x) for x in schedule])
+        this_net.tick()
+        i = i + 1
+
+
+#    while sme.has_data():
+#        # tick is done here
+#        new_slice = sme.operate()
+#        ngrains = 512
+#        schedule = marsyas.realvec(nn * ngrains)
+#        for j in range(0,ngrains):
+#            schedule[j*nn + 0] = j#random.randint(0,buffsize) # in how many samples should be play it
+#            schedule[j*nn + 1] = random.randint(1,slicecnt)
+#            schedule[j*nn + 2] = 0.1
+#            print str(schedule[j*nn + 1])
+#        output_net_begin_control = output_net.getControl("RealvecGrainSource/real_src/mrs_realvec/schedule")
+#        output_net_begin_control.setValue_realvec(schedule)
+#        output_net.updControl("RealvecGrainSource/real_src/mrs_bool/schedcommit",marsyas.MarControlPtr.from_bool(True))
+#        output_net.tick()
 main()
 
