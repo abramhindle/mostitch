@@ -42,16 +42,28 @@ from numpy import *
 #from numpy.random import *
 import cPickle
 import random
+import argparse
 
 #PLOT = True
 PLOT = False
 pyflann.set_distance_type('kl')
 flann = FLANN()
 topn = 20
-buffsize = 2048
-buffsize = 1024
-learning = False#True#False
-csound = False
+#buffsize = 2048
+#buffsize = 1024
+#learning = False#True#False
+#csound = False
+
+parser = argparse.ArgumentParser(description='Mostitch!')
+parser.add_argument('--buffsize', default=1024, help='Buffer Size')
+parser.add_argument('--csound', default=False, help='Print Csound Stuff')
+parser.add_argument('--learn', default=False, help='Turn Learning on or Off')
+parser.add_argument('file', help='Filename')
+args = parser.parse_args()
+buffsize = int(args.buffsize)
+csound = args.csound
+learning = args.learn
+myfilename = args.file
 
 #texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Series/lspbranch" ,"Series/lpccbranch" ,"MFCC/mfcc" ,"SCF/scf" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd" ,"Series/chromaPrSeries"]
 # texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd","AbsMax/abs","Energy/energy","MeanAbsoluteDeviation/mad","TimbreFeatures/featExtractor"]
@@ -270,7 +282,7 @@ def chooser( results ):
 
 def main():
     try:    
-        filename_input = sys.argv[1]
+        filename_input = myfilename
     except:
         print "USAGE: ./mostitch.py input_filename.wav"
         exit(1)
