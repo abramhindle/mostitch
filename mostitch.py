@@ -60,6 +60,7 @@ parser.add_argument('--buffsize', default=1024, help='Buffer Size')
 parser.add_argument('--csound', default=False, help='Print Csound Stuff')
 parser.add_argument('--distance', default='euclidean', help='What Distance type to use: euclidean kl manhattan minkowski hik hellinger cs')
 parser.add_argument('--learn', default=False, help='Turn Learning on or Off')
+parser.add_argument('--window', default="hann", help='Which window function to use: hann saw flat triangle')
 parser.add_argument('--topn', default=20, help='Top N from NN')
 parser.add_argument('files', help='Filenames',nargs='+')
 args = parser.parse_args()
@@ -70,7 +71,7 @@ myfiles = args.files
 pyflann.set_distance_type(args.distance)
 flann = FLANN()
 topn = int(args.topn)
-
+window_name = args.window
 
 
 #texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Series/lspbranch" ,"Series/lpccbranch" ,"MFCC/mfcc" ,"SCF/scf" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd" ,"Series/chromaPrSeries"]
@@ -266,6 +267,17 @@ def flat(size):
         v[i] = 1
     return v
 
+def make_window(name , size):
+    name = name.lower()
+    if (name == "triangle"):
+        return triangle(size)
+    elif (name == "saw"):
+        return saw(size)
+    elif (name=="hann" or name=="hanning"):
+        return hann_window(size)
+    else:
+        return flat(size)
+
 def printlist( l ):
     print ",".join([str(x) for x in l])
 
@@ -287,21 +299,19 @@ def chooser( results ):
     print "Choice:%d Myi:%d" % (choice, myi)
     return choice
 
+def warn(mystr):
+    print >> sys.stderr, mystr
 
 def main():
     # read the slices    
     slices = []
     for filename_input in myfiles:
-        print "Opening "+filename_input
+        warn("Opening "+filename_input)
         newslices = read_in_file_with_stats( filename_input ) 
         slices = slices + newslices
-    #    print(len(slices))
     # get NN
     dataset = array([s.stats for s in slices])
-    #window = triangle(buffsize)
-    window = hann_window(buffsize)
-    #window = flat(buffsize)
-    #flat(buffsize)#saw(buffsize)#triangle(buffsize) #flat(buffsize) #triangle(buffsize)
+    window = make_window( window_name, buffsize)
     for slice in slices:
         slice.rv *= window
     #print ",".join([str(x) for x in slices[1000].rv])
