@@ -61,6 +61,8 @@ parser.add_argument('--csound', default=False, help='Print Csound Stuff')
 parser.add_argument('--distance', default='euclidean', help='What Distance type to use: euclidean kl manhattan minkowski hik hellinger cs')
 parser.add_argument('--learn', default=False, help='Turn Learning on or Off')
 parser.add_argument('--window', default="hann", help='Which window function to use: hann saw flat triangle')
+parser.add_argument('--mingrains', default=10, help='Minimum number of grains')
+parser.add_argument('--maxgrains', default=100, help='Maximum number of grains')
 parser.add_argument('--topn', default=20, help='Top N from NN')
 parser.add_argument('files', help='Filenames',nargs='+')
 args = parser.parse_args()
@@ -72,7 +74,8 @@ pyflann.set_distance_type(args.distance)
 flann = FLANN()
 topn = int(args.topn)
 window_name = args.window
-
+maxgrains = int(args.maxgrains)
+mingrains = int(args.mingrains)
 
 #texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Series/lspbranch" ,"Series/lpccbranch" ,"MFCC/mfcc" ,"SCF/scf" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd" ,"Series/chromaPrSeries"]
 # texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd","AbsMax/abs","Energy/energy","MeanAbsoluteDeviation/mad","TimbreFeatures/featExtractor"]
@@ -314,19 +317,15 @@ def main():
     window = make_window( window_name, buffsize)
     for slice in slices:
         slice.rv *= window
-    #print ",".join([str(x) for x in slices[1000].rv])
-    #params = flann.build_index(dataset, algorithm="autotuned", target_precision=0.9, log_level = "info")
     params = flann.build_index(dataset, algorithm="kdtree", target_precision=0.9, log_level = "info")
     output_net = make_output()
     slicecnt = 0
     for slice in slices:
         load_slice( output_net, slicecnt, slice )
         slicecnt += 1
-
     sme = StreamMetricExtractor()
     init_audio_out( output_net )
-    schedule_control = output_net.getControl(
-        grainuri + "/mrs_realvec/schedule")
+    schedule_control = output_net.getControl(grainuri + "/mrs_realvec/schedule")
     schedsize = 3 # size of a schedule
     nn = schedsize
     while sme.has_data():
@@ -340,22 +339,14 @@ def main():
             slicecnt = len(slices)
             load_slice( output_net, slicecnt, new_slice )
         # here's the granular part
-        ngrains = random.randint(10,1000)
-        # ngrains = 1
+        ngrains = random.randint(mingrains,maxgrains)
         schedule = marsyas.realvec(schedsize * ngrains)
         for j in range(0,ngrains):
             # in the next 10th of a second
             schedule[j*schedsize + 0] = random.randint(0,buffsize*3)#44100/10)
             # beta is skewed, so it stays pretty low
-            #c = random.randint(0,len(result)-1)#int((len(result)-2)*random.betavariate(1,3))
-            #c = 0#int((len(result)-2)*random.betavariate(1,3))
             c = int((len(result)-1)*random.betavariate(1,3))
-            #c = random.randint(0,len(result)-1)
-            #if (random.choice([True,False])):
             choice = int(result[ c ]) 
-            #else:
-            #    choice = chooser(result)
-            #print str(choice)
             schedule[j*schedsize + 1] = choice # choose the slice
             amp = random.random() * 0.2
             depth = 512*(choice-1)/44100.0
@@ -364,10 +355,6 @@ def main():
             when = (schedule[j*schedsize + 0])/44100.0
             if (csound):
                 print "i1 %f %f %f %f %d"%(when,dur,amp,depth,choice)
-        #print new_slice.str()
-        #print ",".join([str(x) for x in result])
-        #print(choice)
-        
         schedule_control = output_net.getControl(
             grainuri + "/mrs_realvec/schedule")
         schedule_control.setValue_realvec(schedule)
