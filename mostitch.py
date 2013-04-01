@@ -7,6 +7,7 @@ audio and produces output source audio which is composed of chunks of
 the input. The output is usually is meant to mimic another signal
 (like a song or speech).
 
+   Originally from bextract.py
    Originally from in_out.py
    (C) 2013 Graham Percival
    a quick hack to demonstrate getting data between python and
@@ -45,7 +46,9 @@ import random
 
 #PLOT = True
 PLOT = False
-pyflann.set_distance_type('kl')
+#pyflann.set_distance_type('kl')
+pyflann.set_distance_type('euclidean')
+#pyflann.set_distance_type('manhattan')
 flann = FLANN()
 topn = 20
 buffsize = 2048
