@@ -48,10 +48,8 @@ import argparse
 #PLOT = True
 PLOT = False
 #pyflann.set_distance_type('kl')
-pyflann.set_distance_type('euclidean')
+
 #pyflann.set_distance_type('manhattan')
-flann = FLANN()
-topn = 20
 #buffsize = 2048
 #buffsize = 1024
 #learning = False#True#False
@@ -60,13 +58,20 @@ topn = 20
 parser = argparse.ArgumentParser(description='Mostitch!')
 parser.add_argument('--buffsize', default=1024, help='Buffer Size')
 parser.add_argument('--csound', default=False, help='Print Csound Stuff')
+parser.add_argument('--distance', default='euclidean', help='What Distance type to use: euclidean kl manhattan minkowski hik hellinger cs')
 parser.add_argument('--learn', default=False, help='Turn Learning on or Off')
-parser.add_argument('file', help='Filename')
+parser.add_argument('--topn', default=20, help='Top N from NN')
+parser.add_argument('files', help='Filenames',nargs='+')
 args = parser.parse_args()
 buffsize = int(args.buffsize)
 csound = args.csound
 learning = args.learn
-myfilename = args.file
+myfiles = args.files
+pyflann.set_distance_type(args.distance)
+flann = FLANN()
+topn = int(args.topn)
+
+
 
 #texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Series/lspbranch" ,"Series/lpccbranch" ,"MFCC/mfcc" ,"SCF/scf" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd" ,"Series/chromaPrSeries"]
 # texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd","AbsMax/abs","Energy/energy","MeanAbsoluteDeviation/mad","TimbreFeatures/featExtractor"]
@@ -284,13 +289,12 @@ def chooser( results ):
 
 
 def main():
-    try:    
-        filename_input = myfilename
-    except:
-        print "USAGE: ./mostitch.py input_filename.wav"
-        exit(1)
     # read the slices    
-    slices = read_in_file_with_stats( filename_input )
+    slices = []
+    for filename_input in myfiles:
+        print "Opening "+filename_input
+        newslices = read_in_file_with_stats( filename_input ) 
+        slices = slices + newslices
     #    print(len(slices))
     # get NN
     dataset = array([s.stats for s in slices])
