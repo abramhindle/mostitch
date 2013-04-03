@@ -44,6 +44,8 @@ from numpy import *
 import cPickle
 import random
 import argparse
+import zmq
+
 
 #PLOT = True
 PLOT = False
@@ -76,6 +78,15 @@ topn = int(args.topn)
 window_name = args.window
 maxgrains = int(args.maxgrains)
 mingrains = int(args.mingrains)
+
+state = {
+	"maxgrains":maxgrains,
+	"mingrains":mingrains,
+	"amp":0.2,
+	"topn":topn,
+        "delay":3*buffsize,
+        "learning":learning
+}
 
 #texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Series/lspbranch" ,"Series/lpccbranch" ,"MFCC/mfcc" ,"SCF/scf" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd" ,"Series/chromaPrSeries"]
 # texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd","AbsMax/abs","Energy/energy","MeanAbsoluteDeviation/mad","TimbreFeatures/featExtractor"]
@@ -305,6 +316,24 @@ def chooser( results ):
 def warn(mystr):
     print >> sys.stderr, mystr
 
+
+URL="tcp://127.0.0.1:11119"
+ctx = zmq.Context(1)
+socket = ctx.socket(zmq.REP)
+socket.bind(URL)
+poller = zmq.Poller()
+poller.register(socket, zmq.POLLIN|zmq.POLLOUT)
+
+def process_zmq():
+    events = poller.poll(timeout=0)
+    for x in events:
+        if (zmq.POLLIN == x[1]):
+            newstate = socket.recv_pyobj()
+            for key in newstate:
+                state[key] = newstate[key]
+                warn("%s updated to %s" % (str(key), str(state[key])))
+            socket.send_pyobj(state, flags=zmq.NOBLOCK)
+                
 def main():
     # read the slices    
     slices = []
@@ -333,34 +362,34 @@ def main():
         new_slice = sme.operate()
         results, dists = flann.nn_index(array([new_slice.stats]),topn, checks=params["checks"]);
         result = results[0]
-        if (learning):
+        if (state["learning"]):
             slices.append(new_slice)
             flann.add_points(array([new_slice.stats]))
             slicecnt = len(slices)
             load_slice( output_net, slicecnt, new_slice )
         # here's the granular part
-        ngrains = random.randint(mingrains,maxgrains)
+        ngrains = random.randint(state["mingrains"],state["maxgrains"])
         schedule = marsyas.realvec(schedsize * ngrains)
         for j in range(0,ngrains):
             # in the next 10th of a second
-            schedule[j*schedsize + 0] = random.randint(0,buffsize*3)#44100/10)
+            schedule[j*schedsize + 0] = random.randint(0,state["delay"])#44100/10)
             # beta is skewed, so it stays pretty low
             c = int((len(result)-1)*random.betavariate(1,3))
             choice = int(result[ c ]) 
             schedule[j*schedsize + 1] = choice # choose the slice
-            amp = random.random() * 0.2
+            amp = random.random() * state["amp"]
             depth = 512*(choice-1)/44100.0
             schedule[j*schedsize + 2] = amp
             dur = buffsize/44100.0
             when = (schedule[j*schedsize + 0])/44100.0
             if (csound):
                 print "i1 %f %f %f %f %d"%(when,dur,amp,depth,choice)
-        schedule_control = output_net.getControl(
-            grainuri + "/mrs_realvec/schedule")
+        schedule_control = output_net.getControl(grainuri + "/mrs_realvec/schedule")
         schedule_control.setValue_realvec(schedule)
         output_net.updControl(grainuri + "/mrs_bool/schedcommit",
-                              marsyas.MarControlPtr.from_bool(True))
+                              marsyas.MarControlPtr.from_bool(True))        
         output_net.tick()
+	process_zmq()
 
 main()
 
