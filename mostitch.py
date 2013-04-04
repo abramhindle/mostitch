@@ -368,7 +368,9 @@ def main():
             slicecnt = len(slices)
             load_slice( output_net, slicecnt, new_slice )
         # here's the granular part
-        ngrains = random.randint(state["mingrains"],state["maxgrains"])
+        ngrains = random.randint(
+            min(state["mingrains"],state["maxgrains"]),
+            max(state["mingrains"],state["maxgrains"]))
         schedule = marsyas.realvec(schedsize * ngrains)
         for j in range(0,ngrains):
             # in the next 10th of a second

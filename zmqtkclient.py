@@ -1,6 +1,7 @@
 import zmq
 import time
 from Tkinter import *
+from pprint import pprint
 
 URL="tcp://127.0.0.1:11119"
 
@@ -13,104 +14,84 @@ def send_change(state):
 	res = socket.recv_pyobj()
         return res
 
-
-
+initial_state = send_change({})
+pprint(initial_state)
 
 class App:     
     def _update(self):
         self.state = send_change(self.state)
-    def minchange(self,a1):
-        self.state["mingrains"] = int(a1)
-        self.__correct_grains()
-        self._update()
-        return 1
-    def __correct_grains(self):
-        mingrains = min(self.state["mingrains"], self.state["maxgrains"])
-        maxgrains = max(self.state["mingrains"], self.state["maxgrains"])
-        self.state["mingrains"] = mingrains
-        self.state["maxgrains"] = maxgrains
-    def maxchange(self,a1):
-        self.state["maxgrains"] = int(a1)
-        self.__correct_grains()
-        self._update()
-        return 1
-    def ampchange(self,a1):
-        self.state["amp"] = int(a1)/1000.0
-        self._update()
-    def topnchange(self,a1):
-        self.state["topn"] = int(a1)
-        self._update()
-    def delaychange(self,a1):
-        self.state["delay"] = int(a1)
-        self._update()
     def dflcommand(self, statename, a1):
-        self.state[statename] = int(a1)
+        self.state[statename] = float(a1)
         self._update()
-    def make_slider(self,name,statename,from_=0,to=1000,command=None):
+    def boolcommand(self, statename, a1):
+        self.state[statename] = bool(a1)
+        self._update()
+    def make_slider(self,name,statename,from_=0,to=1000,command=None,resolution=1):
         labelname = statename + "_label"
-        self.widgets[labelname] = Label(frame,text=name)
-        self.widgets[labelname].grid(row=curr_row,column=0,sticky=self.maxsticky)
+        self.widgets[labelname] = Label(self.frame,text=name)
+        self.widgets[labelname].grid(row=self.curr_row,column=0,sticky=self.maxsticky)
         dflcommand = lambda(x): self.dflcommand(statename,x)
-        command = dflcommand if command == None
+        if (command == None):
+                command = dflcommand 
         self.widgets[statename] = Scale(
-                frame, 
+                self.frame, 
                 from_=from_,
                 to=to,
                 command=dflcommand,
+                resolution=resolution,
                 orient=HORIZONTAL)
-        self.widgets[statename].grid(row=curr_row,column=1,sticky=self.maxsticky)
+        self.widgets[statename].set(self.state[statename])
+        self.widgets[statename].grid(row=self.curr_row,column=1,sticky=self.maxsticky)
         self.curr_row += 1
+
+    def make_check(self,name,statename,command=None):
+        labelname = statename + "_label"
+        self.widgets[labelname] = Label(self.frame,text=name)
+        self.widgets[labelname].grid(row=self.curr_row,column=0,sticky=self.maxsticky)
+        ourcheck = IntVar()
+        dflcommand = lambda: self.boolcommand(statename,ourcheck.get())
+        if (command == None):
+                command = dflcommand 
+        self.widgets[statename] = Checkbutton(
+                self.frame, 
+                text=name,
+                variable = ourcheck,
+                command=command)
+        self.widgets[statename].var = ourcheck
+        if (bool(self.state.get(statename,False))):
+                self.widgets[statename].select()
+        else:
+                self.widgets[statename].deselect()
+        self.widgets[statename].grid(row=self.curr_row,column=1,sticky=self.maxsticky)
+        self.curr_row += 1
+
   
-    def __init__(self, master):
+    def __init__(self, master, initial_state):
         self.curr_row = 0
         self.widgets = {}
         self.maxsticky = N+S+E+W
+        self.state = initial_state
         frame = Frame(master)
-        frame.grid(sticky=maxsticky)
+        self.frame = frame
+        # resizing stuff
+        frame.grid(sticky=self.maxsticky)
         top=master.winfo_toplevel()
         top.rowconfigure(0, weight=1)
-        #top.rowconfigure(1, weight=1)
-        #top.rowconfigure(2, weight=1)
         top.columnconfigure(0, weight=1)
-        #top.columnconfigure(1, weight=1)
         frame.rowconfigure(0, weight=1)
         frame.rowconfigure(1, weight=1)
         frame.rowconfigure(2, weight=1)
         frame.columnconfigure(0, weight=1)
         frame.columnconfigure(1, weight=1)
-        self.state = {
-                "maxgrains":100,
-                "mingrains":10,
-                "amp":20,
-                "delay":1024*3
-        }
-        self.make_slider("Min Grain", "mingrains", command=self.minchange)
-        self.make_slider("Max Grain", "maxgrains", command=self.maxchange)
-        
-        self.maxlabel = Label(frame,text="Max Grain")
-        self.maxlabel.grid(row=1,column=0,sticky=maxsticky)
-        self.max = Scale(frame, to=1000,command=self.maxchange,orient=HORIZONTAL)
-        self.max.grid(row=1,column=1,sticky=maxsticky)
-        
-        self.label = Label(frame,text="Amp")
-        self.label.grid(row=2,column=0,sticky=maxsticky)
-        self.amp = Scale(frame, to=1000,command=self.ampchange,orient=HORIZONTAL)
-        self.amp.grid(row=2,column=1,sticky=maxsticky)
-        self.label = Label(frame,text="Top N")
-        self.label.grid(row=3,column=0,sticky=maxsticky)
-        self.topn = Scale(frame, from_=1, to=25,command=self.topnchange,orient=HORIZONTAL)
-        self.topn.grid(row=3,column=1,sticky=maxsticky)
-        self.delaylabel = Label(frame,text="Max Delay")
-        self.delaylabel.grid(row=4,column=0,sticky=maxsticky)
-        self.delay = Scale(frame, from_=1, to=44100,command=self.delaychange,orient=HORIZONTAL)
-        self.delay.grid(row=4,column=1,sticky=maxsticky)
-        
-        
-        self.frame = frame
-
-
+        # GUI Stuff
+        self.make_slider("Min Grain", "mingrains")
+        self.make_slider("Max Grain", "maxgrains")
+        self.make_slider("Amp", "amp",from_=0,to=1,resolution=0.01)
+        self.make_slider("Top N", "topn",from_=1,to=25)
+        self.make_slider("Max Delay","delay",from_=1,to=10*44100)
+        self.make_check("Learn","learning")
 
 root = Tk()
-app = App(root)
+app = App(root, initial_state)
 root.mainloop()
 
