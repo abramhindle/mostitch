@@ -504,66 +504,6 @@ class CsoundMostich(Mostitch):
 
     
  
-#def old_main():
-#    # read the slices    
-#    slices = []
-#    for filename_input in myfiles:
-#        warn("Opening "+filename_input)
-#        newslices = read_in_file_with_stats( filename_input ) 
-#        slices = slices + newslices
-#    # get NN
-#    dataset = array([s.stats for s in slices])
-#    window = make_window( window_name, buffsize)
-#    for slice in slices:
-#        slice.rv *= window
-#    params = flann.build_index(dataset, algorithm="kdtree", target_precision=0.9, log_level = "info")
-#    output_net = make_output()
-#    slicecnt = 0
-#    for slice in slices:
-#        load_slice( output_net, slicecnt, slice )
-#        slicecnt += 1
-#    sme = StreamMetricExtractor()
-#    init_audio_out( output_net )
-#    schedule_control = output_net.getControl(grainuri + "/mrs_realvec/schedule")
-#    schedsize = 3 # size of a schedule
-#    nn = schedsize
-#    while sme.has_data():
-#        # tick is done here
-#        new_slice = sme.operate()
-#        results, dists = flann.nn_index(array([new_slice.stats]),topn, checks=params["checks"]);
-#        result = results[0]
-#        if (state["learning"]):
-#            slices.append(new_slice)
-#            flann.add_points(array([new_slice.stats]))
-#            slicecnt = len(slices)
-#            load_slice( output_net, slicecnt, new_slice )
-#        # here's the granular part
-#        ngrains = random.randint(
-#            min(state["mingrains"],state["maxgrains"]),
-#            max(state["mingrains"],state["maxgrains"]))
-#        schedule = marsyas.realvec(schedsize * ngrains)
-#        for j in range(0,ngrains):
-#            # in the next 10th of a second
-#            schedule[j*schedsize + 0] = random.randint(0,state["delay"])#44100/10)
-#            # beta is skewed, so it stays pretty low
-#            c = int((len(result)-1)*random.betavariate(1,3))
-#            choice = int(result[ c ]) 
-#            schedule[j*schedsize + 1] = choice # choose the slice
-#            amp = random.random() * state["amp"]
-#            depth = 512*(choice-1)/44100.0
-#            schedule[j*schedsize + 2] = amp
-#            dur = buffsize/44100.0
-#            when = (schedule[j*schedsize + 0])/44100.0
-#            if (csound):
-#                print "i1 %f %f %f %f %d"%(when,dur,amp,depth,choice)
-#        schedule_control = output_net.getControl(grainuri + "/mrs_realvec/schedule")
-#        schedule_control.setValue_realvec(schedule)
-#        output_net.updControl(grainuri + "/mrs_bool/schedcommit",
-#                              marsyas.MarControlPtr.from_bool(True))        
-#        output_net.tick()
-#        self.process_zmq()
-#	self.zmq.process_zmq()
-#
 def main():
     settings = parse_args()
     mostitch = Mostitch( settings["buffsize"], settings["state"] )
