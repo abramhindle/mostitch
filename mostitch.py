@@ -529,7 +529,6 @@ def zmq_test():
         zmq.process_zmq(state)
 
 def main():
-    zmq_test()
     settings = parse_args()
     mostitch = None
     if (settings["csound"]):
