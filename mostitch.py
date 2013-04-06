@@ -324,34 +324,10 @@ def chooser( results ):
 def warn(mystr):
     print >> sys.stderr, mystr
 
-def mk_ctx():
-    ctx = zmq.Context(1)
-    return ctx
-
-def setup_socket(ctx,URL="tcp://127.0.0.1:11119"):
-    socket = ctx.socket(zmq.REP)
-    socket.bind(URL)
-    poller = zmq.Poller()
-    poller.register(socket, zmq.POLLIN|zmq.POLLOUT)
-    return (socket, poller)
-
-def process_zmq(socket, poller, state):
-    print "Process_zmq"
-    print str(state)
-    events = poller.poll(timeout=0)
-    for x in events:
-        print str(x)
-        if (zmq.POLLIN == x[1]):
-            newstate = socket.recv_pyobj()
-            for key in newstate:
-                state[key] = newstate[key]
-                warn("%s updated to %s" % (str(key), str(state[key])))
-                socket.send_pyobj(state)#, flags=zmq.NOBLOCK)
-        elif (zmq.POLLOUT == x[1]):
-            warn("Why did we get a POLLOUT?")
-
 class ZMQCommunicator:
-    def __init__(self, URL="tcp://127.0.0.1:11119"):
+    def __init__(self, URL="tcp://127.0.0.1:11119", ctx=None):
+        if (ctx == None):
+            ctx = zmq.Context(1)
         socket = ctx.socket(zmq.REP)
         self.socket = socket
         socket.bind(URL)
@@ -372,7 +348,7 @@ class ZMQCommunicator:
                 for key in newstate:
                     state[key] = newstate[key]
                     warn("%s updated to %s" % (str(key), str(state[key])))
-                    socket.send_pyobj(state)#, flags=zmq.NOBLOCK)
+                socket.send_pyobj(state)#, flags=zmq.NOBLOCK)
             elif (zmq.POLLOUT == x[1]):
                 warn("Why did we get a POLLOUT?")
                 #self.socket.send_pyobj(state, flags=zmq.NOBLOCK)
@@ -547,13 +523,10 @@ class CsoundMostich(Mostitch):
         print "i1 %f %f %f %f %d"%(when,dur,amp,depth,choice)
 
 def zmq_test():
-    #zmq = ZMQCommunicator()
-    #ctx = mk_ctx()
-    #socket, poller = setup_socket(ctx)
+    zmq = ZMQCommunicator()
     state = dfl_state()    
     while 1:
-        process_zmq( socket, poller, state)
-        #zmq.process_zmq(state)
+        zmq.process_zmq(state)
 
 def main():
     zmq_test()
