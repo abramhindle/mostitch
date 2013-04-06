@@ -506,7 +506,11 @@ class CsoundMostich(Mostitch):
  
 def main():
     settings = parse_args()
-    mostitch = Mostitch( settings["buffsize"], settings["state"] )
+    mostitch = None
+    if (settings["csound"]):
+        mostitch = CsoundMostitch( settings["buffsize"], settings["state"] )
+    else:
+        mostitch = Mostitch( settings["buffsize"], settings["state"] )
     mostitch.mostitch_main( settings["files"], settings["window_name"] )
 
 if __name__ == "__main__":
