@@ -73,7 +73,7 @@ csound = args.csound
 learning = args.learn
 myfiles = args.files
 pyflann.set_distance_type(args.distance)
-flann = FLANN()
+#flann = FLANN()
 topn = int(args.topn)
 window_name = args.window
 maxgrains = int(args.maxgrains)
@@ -317,81 +317,260 @@ def warn(mystr):
     print >> sys.stderr, mystr
 
 
-URL="tcp://127.0.0.1:11119"
-ctx = zmq.Context(1)
-socket = ctx.socket(zmq.REP)
-socket.bind(URL)
-poller = zmq.Poller()
-poller.register(socket, zmq.POLLIN|zmq.POLLOUT)
+class ZMQCommunicator:
+    def __init__(self, URL="tcp://127.0.0.1:11119", ctx=None):
+        if (ctx == None):
+            ctx = zmq.Context(1)
+        self.socket = ctx.socket(zmq.REP)
+        self.socket.bind(URL)
+        self.poller = zmq.Poller()
+        self.poller.register(self.socket, zmq.POLLIN|zmq.POLLOUT)
+        
+    # mutates state
+    def process_zmq(self,state):
+        events = self.poller.poll(timeout=0)
+        for x in events:
+            if (zmq.POLLIN == x[1]):
+                newstate = self.socket.recv_pyobj()
+                for key in newstate:
+                    state[key] = newstate[key]
+                    warn("%s updated to %s" % (str(key), str(state[key])))
+                    self.socket.send_pyobj(state, flags=zmq.NOBLOCK)
 
-def process_zmq():
-    events = poller.poll(timeout=0)
-    for x in events:
-        if (zmq.POLLIN == x[1]):
-            newstate = socket.recv_pyobj()
-            for key in newstate:
-                state[key] = newstate[key]
-                warn("%s updated to %s" % (str(key), str(state[key])))
-            socket.send_pyobj(state, flags=zmq.NOBLOCK)
-                
-def main():
-    # read the slices    
-    slices = []
-    for filename_input in myfiles:
+
+    
+schedsize = 3
+
+class Delayer:
+    def delay(self, max_delay):
+        return random.randint(0,max_delay)    
+
+class Chooser:
+    # choose returns an int, which is a slice ID from a list of results
+    def choose(self, result):
+        return int(result[0])
+
+class BetaChooser:
+    def choose(self, result):
+        c = int((len(result)-1)*random.betavariate(1,3))
+        choice = int(result[ c ]) 
+        return choice
+
+class Mostitch:
+    def __init__(self, buffsize = 1024, state = {}):
+        self.buffsize = buffsize
+        self.slices = []
+        self.window = None
+        self.params = None
+        self.state = state
+        self.flann = FLANN()
+        # state pattern
+        self.set_chooser( BetaChooser() )
+        self.set_delayer( Delayer() )
+        self.zmq = ZMQCommunicator()
+
+    def set_chooser(self, chooser ):
+        self.chooser = chooser
+
+    def set_delayer(self, delayer ):
+        self.delayer = delayer
+
+    def load_file(self, filename_input ):
         warn("Opening "+filename_input)
         newslices = read_in_file_with_stats( filename_input ) 
-        slices = slices + newslices
-    # get NN
-    dataset = array([s.stats for s in slices])
-    window = make_window( window_name, buffsize)
-    for slice in slices:
+        self.slices += newslices
+        self.slicecnt = len(self.slices)
+        
+    def load_files(self, filenames ):
+        for filename_input in filenames:
+            self.load_file(filename_input)
+
+    def set_window( self, window_name ):
+        self.window = make_window( window_name, self.buffsize )
+        
+    def apply_window_to_slice(self, slice, window):
         slice.rv *= window
-    params = flann.build_index(dataset, algorithm="kdtree", target_precision=0.9, log_level = "info")
-    output_net = make_output()
-    slicecnt = 0
-    for slice in slices:
-        load_slice( output_net, slicecnt, slice )
-        slicecnt += 1
-    sme = StreamMetricExtractor()
-    init_audio_out( output_net )
-    schedule_control = output_net.getControl(grainuri + "/mrs_realvec/schedule")
-    schedsize = 3 # size of a schedule
-    nn = schedsize
-    while sme.has_data():
-        # tick is done here
-        new_slice = sme.operate()
-        results, dists = flann.nn_index(array([new_slice.stats]),topn, checks=params["checks"]);
-        result = results[0]
-        if (state["learning"]):
-            slices.append(new_slice)
-            flann.add_points(array([new_slice.stats]))
-            slicecnt = len(slices)
-            load_slice( output_net, slicecnt, new_slice )
-        # here's the granular part
+
+    def apply_window_to_slices( self ):
+        if (self.window != None):
+            for slice in self.slices:
+                self.apply_window_to_slice( slice, self.window )
+    
+    def train_on_slices( self ):
+        dataset = array([s.stats for s in self.slices])
+        params = self.flann.build_index(dataset, algorithm="kdtree", target_precision=0.9, log_level = "info")
+        self.params = params
+    
+    def init_output_network(self):
+        output_net = make_output()
+        slicecnt = 0
+        for slice in self.slices:
+            load_slice( output_net, slicecnt, slice )
+            slicecnt += 1
+        self.schedule_control = output_net.getControl(grainuri + "/mrs_realvec/schedule")
+        self.output_net = output_net
+        
+    def init_input_network(self):
+        self.sme = StreamMetricExtractor()
+
+    def init_audio(self):
+        init_audio_out( self.output_net )
+        
+    def has_input(self):
+        return self.sme.has_data()
+
+    def learn(self, slice):
+        self.slices.append(new_slice)
+        self.flann.add_points(array([new_slice.stats]))
+        self.slicecnt = len(slices)
+        load_slice( output_net, slicecnt, new_slice )
+
+    def cond_learn(self, slice):
+        if (self.state["learning"]):
+            self.learn( slice )
+
+    # state pattern
+    def choose( self, result ):
+        return self.chooser.choose(result)
+
+    # state pattern
+    def generate_delay( self ):
+        return self.delayer.delay(self.state["delay"])
+
+
+    def post_schedule_grain(self, delay, choice, amp ):
+        return None
+
+    def process_zmq(self):
+        self.zmq.process_zmq(self.state)
+
+    # override to change how the number of ngrains are chosen
+    def generate_ngrains(self):
+        state = self.state
         ngrains = random.randint(
             min(state["mingrains"],state["maxgrains"]),
             max(state["mingrains"],state["maxgrains"]))
-        schedule = marsyas.realvec(schedsize * ngrains)
+        return ngrains
+        
+    # override to change how the amplitude of a grain is chosen
+    def generate_amp(self):
+        amp = random.random() * self.state["amp"]
+        return amp
+
+    def step(self):
+        state = self.state
+        new_slice = self.sme.operate()
+        results, dists = self.flann.nn_index(array([new_slice.stats]),state["topn"], checks=self.params["checks"]);
+        result = results[0]
+        self.cond_learn( new_slice )
+        # here's the granular part
+        ngrains = self.generate_ngrains()
+        # this is a bad smell, we could make this an object!
+        schedule = marsyas.realvec(schedsize * ngrains)        
         for j in range(0,ngrains):
-            # in the next 10th of a second
-            schedule[j*schedsize + 0] = random.randint(0,state["delay"])#44100/10)
-            # beta is skewed, so it stays pretty low
-            c = int((len(result)-1)*random.betavariate(1,3))
-            choice = int(result[ c ]) 
+            # in the next ___ of a second
+            delay = self.generate_delay()
+            schedule[j*schedsize + 0] = self.generate_delay()
+            choice = self.choose( result )
             schedule[j*schedsize + 1] = choice # choose the slice
-            amp = random.random() * state["amp"]
-            depth = 512*(choice-1)/44100.0
+            amp = self.generate_amp()
             schedule[j*schedsize + 2] = amp
-            dur = buffsize/44100.0
-            when = (schedule[j*schedsize + 0])/44100.0
-            if (csound):
-                print "i1 %f %f %f %f %d"%(when,dur,amp,depth,choice)
-        schedule_control = output_net.getControl(grainuri + "/mrs_realvec/schedule")
+            self.post_schedule_grain( delay, choice, amp )
+        schedule_control = self.output_net.getControl(grainuri + "/mrs_realvec/schedule")
         schedule_control.setValue_realvec(schedule)
-        output_net.updControl(grainuri + "/mrs_bool/schedcommit",
+        self.output_net.updControl(grainuri + "/mrs_bool/schedcommit",
                               marsyas.MarControlPtr.from_bool(True))        
-        output_net.tick()
-	process_zmq()
+        self.output_net.tick()
+	self.process_zmq()
+
+
+    # run this if you are lazy
+    def mostitch_main(self, myfiles):
+        mostitch = self
+        mostitch.load_files( myfiles )
+        mostitch.set_window( window_name )
+        mostitch.apply_window_to_slices()
+        mostitch.train_on_slices()
+        mostitch.init_output_network()
+        mostitch.init_input_network()
+        mostitch.init_audio()
+        while (mostitch.has_input()):
+            mostitch.step()
+            
+
+class CsoundMostich(Mostitch):
+    def post_schedule_grain(self, delay, choice, amp ):
+        depth = 512*(choice-1)/44100.0
+        schedule[j*schedsize + 2] = amp
+        dur = buffsize/44100.0
+        when = (schedule[j*schedsize + 0])/44100.0
+        print "i1 %f %f %f %f %d"%(when,dur,amp,depth,choice)
+
+    
+ 
+#def old_main():
+#    # read the slices    
+#    slices = []
+#    for filename_input in myfiles:
+#        warn("Opening "+filename_input)
+#        newslices = read_in_file_with_stats( filename_input ) 
+#        slices = slices + newslices
+#    # get NN
+#    dataset = array([s.stats for s in slices])
+#    window = make_window( window_name, buffsize)
+#    for slice in slices:
+#        slice.rv *= window
+#    params = flann.build_index(dataset, algorithm="kdtree", target_precision=0.9, log_level = "info")
+#    output_net = make_output()
+#    slicecnt = 0
+#    for slice in slices:
+#        load_slice( output_net, slicecnt, slice )
+#        slicecnt += 1
+#    sme = StreamMetricExtractor()
+#    init_audio_out( output_net )
+#    schedule_control = output_net.getControl(grainuri + "/mrs_realvec/schedule")
+#    schedsize = 3 # size of a schedule
+#    nn = schedsize
+#    while sme.has_data():
+#        # tick is done here
+#        new_slice = sme.operate()
+#        results, dists = flann.nn_index(array([new_slice.stats]),topn, checks=params["checks"]);
+#        result = results[0]
+#        if (state["learning"]):
+#            slices.append(new_slice)
+#            flann.add_points(array([new_slice.stats]))
+#            slicecnt = len(slices)
+#            load_slice( output_net, slicecnt, new_slice )
+#        # here's the granular part
+#        ngrains = random.randint(
+#            min(state["mingrains"],state["maxgrains"]),
+#            max(state["mingrains"],state["maxgrains"]))
+#        schedule = marsyas.realvec(schedsize * ngrains)
+#        for j in range(0,ngrains):
+#            # in the next 10th of a second
+#            schedule[j*schedsize + 0] = random.randint(0,state["delay"])#44100/10)
+#            # beta is skewed, so it stays pretty low
+#            c = int((len(result)-1)*random.betavariate(1,3))
+#            choice = int(result[ c ]) 
+#            schedule[j*schedsize + 1] = choice # choose the slice
+#            amp = random.random() * state["amp"]
+#            depth = 512*(choice-1)/44100.0
+#            schedule[j*schedsize + 2] = amp
+#            dur = buffsize/44100.0
+#            when = (schedule[j*schedsize + 0])/44100.0
+#            if (csound):
+#                print "i1 %f %f %f %f %d"%(when,dur,amp,depth,choice)
+#        schedule_control = output_net.getControl(grainuri + "/mrs_realvec/schedule")
+#        schedule_control.setValue_realvec(schedule)
+#        output_net.updControl(grainuri + "/mrs_bool/schedcommit",
+#                              marsyas.MarControlPtr.from_bool(True))        
+#        output_net.tick()
+#        self.process_zmq()
+#	self.zmq.process_zmq()
+#
+def main():
+    mostitch = Mostitch( buffsize, state )
+    mostitch.mostitch_main(myfiles)
 
 main()
 
