@@ -4,13 +4,17 @@ from Tkinter import *
 from pprint import pprint
 
 URL="tcp://127.0.0.1:11119"
-
+print "Make Context"
 ctx = zmq.Context(1)
+print "Make Socket"
 socket = ctx.socket(zmq.REQ)
+print "Connect Socket"
 socket.connect(URL)
 cnt = 0
 def send_change(state):
+        print "send change"
 	socket.send_pyobj(state)
+        print "recv update"
 	res = socket.recv_pyobj()
         return res
 

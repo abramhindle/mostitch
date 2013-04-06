@@ -81,6 +81,18 @@ def parse_args():
        "buffsize":buffsize
        }
     return settings
+
+def dfl_state():
+    state = {
+	"maxgrains":100,
+	"mingrains":10,
+	"amp":0.2,
+	"topn":25,
+        "delay":4096,
+        "learning":False
+        }
+    return state
+
     
 #texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Series/lspbranch" ,"Series/lpccbranch" ,"MFCC/mfcc" ,"SCF/scf" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd" ,"Series/chromaPrSeries"]
 # texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd","AbsMax/abs","Energy/energy","MeanAbsoluteDeviation/mad","TimbreFeatures/featExtractor"]
@@ -312,27 +324,59 @@ def chooser( results ):
 def warn(mystr):
     print >> sys.stderr, mystr
 
+def mk_ctx():
+    ctx = zmq.Context(1)
+    return ctx
+
+def setup_socket(ctx,URL="tcp://127.0.0.1:11119"):
+    socket = ctx.socket(zmq.REP)
+    socket.bind(URL)
+    poller = zmq.Poller()
+    poller.register(socket, zmq.POLLIN|zmq.POLLOUT)
+    return (socket, poller)
+
+def process_zmq(socket, poller, state):
+    print "Process_zmq"
+    print str(state)
+    events = poller.poll(timeout=0)
+    for x in events:
+        print str(x)
+        if (zmq.POLLIN == x[1]):
+            newstate = socket.recv_pyobj()
+            for key in newstate:
+                state[key] = newstate[key]
+                warn("%s updated to %s" % (str(key), str(state[key])))
+                socket.send_pyobj(state)#, flags=zmq.NOBLOCK)
+        elif (zmq.POLLOUT == x[1]):
+            warn("Why did we get a POLLOUT?")
 
 class ZMQCommunicator:
-    def __init__(self, URL="tcp://127.0.0.1:11119", ctx=None):
-        if (ctx == None):
-            ctx = zmq.Context(1)
-        self.socket = ctx.socket(zmq.REP)
-        self.socket.bind(URL)
-        self.poller = zmq.Poller()
-        self.poller.register(self.socket, zmq.POLLIN|zmq.POLLOUT)
+    def __init__(self, URL="tcp://127.0.0.1:11119"):
+        socket = ctx.socket(zmq.REP)
+        self.socket = socket
+        socket.bind(URL)
+        poller = zmq.Poller()
+        self.poller = poller 
+        poller.register(self.socket, zmq.POLLIN)#|zmq.POLLOUT)
         
     # mutates state
-    def process_zmq(self,state):
+    def process_zmq(self, state):        
+        print "Process_zmq"
+        print str(state)
         events = self.poller.poll(timeout=0)
+        socket = self.socket
         for x in events:
+            print str(x)
             if (zmq.POLLIN == x[1]):
-                newstate = self.socket.recv_pyobj()
+                newstate = socket.recv_pyobj()
                 for key in newstate:
                     state[key] = newstate[key]
                     warn("%s updated to %s" % (str(key), str(state[key])))
-                    self.socket.send_pyobj(state, flags=zmq.NOBLOCK)
-
+                    socket.send_pyobj(state)#, flags=zmq.NOBLOCK)
+            elif (zmq.POLLOUT == x[1]):
+                warn("Why did we get a POLLOUT?")
+                #self.socket.send_pyobj(state, flags=zmq.NOBLOCK)
+                    
 
     
 schedsize = 3
@@ -502,9 +546,17 @@ class CsoundMostich(Mostitch):
         when = (schedule[j*schedsize + 0])/44100.0
         print "i1 %f %f %f %f %d"%(when,dur,amp,depth,choice)
 
-    
- 
+def zmq_test():
+    #zmq = ZMQCommunicator()
+    #ctx = mk_ctx()
+    #socket, poller = setup_socket(ctx)
+    state = dfl_state()    
+    while 1:
+        process_zmq( socket, poller, state)
+        #zmq.process_zmq(state)
+
 def main():
+    zmq_test()
     settings = parse_args()
     mostitch = None
     if (settings["csound"]):
