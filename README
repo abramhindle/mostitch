@@ -29,10 +29,11 @@ Get pyflann http://people.cs.ubc.ca/~mariusm/index.php/FLANN/FLANN install flann
 
 == TODO ==
 
-* [ ] Expose the index addPoint to the pyflann implementation so we can dynamically add points on
+* [X] Expose the index addPoint to the pyflann implementation so we can dynamically add points on
       the fly
-* [ ] Granular Synthesis
-* [ ] Windowing Samples
+* [X] Granular Synthesis
+* [X] Windowing Samples
+* [ ] Change Pitch/rate of sample playback
 * [ ] Larger input samples than output samples
 
 == License ==
