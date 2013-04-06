@@ -32,7 +32,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 import sys
 import numpy
-#import pylab
 from marsyas import * 
 import marsyas
 import marsyas_util
@@ -40,54 +39,49 @@ import pdb
 import pyflann
 from pyflann import *
 from numpy import *
-#from numpy.random import *
 import cPickle
 import random
 import argparse
 import zmq
 
-
-#PLOT = True
-PLOT = False
-#pyflann.set_distance_type('kl')
-
-#pyflann.set_distance_type('manhattan')
-#buffsize = 2048
-#buffsize = 1024
-#learning = False#True#False
-#csound = False
-
-parser = argparse.ArgumentParser(description='Mostitch!')
-parser.add_argument('--buffsize', default=1024, help='Buffer Size')
-parser.add_argument('--csound', default=False, help='Print Csound Stuff')
-parser.add_argument('--distance', default='euclidean', help='What Distance type to use: euclidean kl manhattan minkowski hik hellinger cs')
-parser.add_argument('--learn', default=False, help='Turn Learning on or Off')
-parser.add_argument('--window', default="hann", help='Which window function to use: hann saw flat triangle')
-parser.add_argument('--mingrains', default=10, help='Minimum number of grains')
-parser.add_argument('--maxgrains', default=100, help='Maximum number of grains')
-parser.add_argument('--topn', default=20, help='Top N from NN')
-parser.add_argument('files', help='Filenames',nargs='+')
-args = parser.parse_args()
-buffsize = int(args.buffsize)
-csound = args.csound
-learning = args.learn
-myfiles = args.files
-pyflann.set_distance_type(args.distance)
-#flann = FLANN()
-topn = int(args.topn)
-window_name = args.window
-maxgrains = int(args.maxgrains)
-mingrains = int(args.mingrains)
-
-state = {
+def parse_args():
+    parser = argparse.ArgumentParser(description='Mostitch!')
+    parser.add_argument('--buffsize', default=1024, help='Buffer Size')
+    parser.add_argument('--csound', default=False, help='Print Csound Stuff')
+    parser.add_argument('--distance', default='euclidean', help='What Distance type to use: euclidean kl manhattan minkowski hik hellinger cs')
+    parser.add_argument('--learn', default=False, help='Turn Learning on or Off')
+    parser.add_argument('--window', default="hann", help='Which window function to use: hann saw flat triangle')
+    parser.add_argument('--mingrains', default=10, help='Minimum number of grains')
+    parser.add_argument('--maxgrains', default=100, help='Maximum number of grains')
+    parser.add_argument('--topn', default=20, help='Top N from NN')
+    parser.add_argument('files', help='Filenames',nargs='+')
+    args = parser.parse_args()
+    buffsize = int(args.buffsize)
+    csound = args.csound
+    learning = args.learn
+    myfiles = args.files
+    pyflann.set_distance_type(args.distance)
+    topn = int(args.topn)
+    window_name = args.window
+    maxgrains = int(args.maxgrains)
+    mingrains = int(args.mingrains)
+    state = {
 	"maxgrains":maxgrains,
 	"mingrains":mingrains,
 	"amp":0.2,
 	"topn":topn,
         "delay":3*buffsize,
         "learning":learning
-}
-
+        }
+    settings = {
+       "files":myfiles,
+       "window_name":window_name
+       "csound":csound
+       "state":state,
+       "buffsize":buffsize
+       }
+    return settings
+    
 #texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Series/lspbranch" ,"Series/lpccbranch" ,"MFCC/mfcc" ,"SCF/scf" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd" ,"Series/chromaPrSeries"]
 # texture = ["Rms/rms", "AubioYin/pitcher","ZeroCrossings/zcrs" ,"Rolloff/rf" ,"Flux/flux" ,"Centroid/cntrd","AbsMax/abs","Energy/energy","MeanAbsoluteDeviation/mad","TimbreFeatures/featExtractor"]
 #texture = ["TimbreFeatures/featExtractor"]
@@ -569,8 +563,9 @@ class CsoundMostich(Mostitch):
 #	self.zmq.process_zmq()
 #
 def main():
-    mostitch = Mostitch( buffsize, state )
-    mostitch.mostitch_main(myfiles)
+    settings = parse_args()
+    mostitch = Mostitch( settings["buffsize"], settings["state"] )
+    mostitch.mostitch_main( settings["files"] )
 
-main()
-
+if __name__ == "__main__":
+    main()
