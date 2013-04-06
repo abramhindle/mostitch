@@ -75,8 +75,8 @@ def parse_args():
         }
     settings = {
        "files":myfiles,
-       "window_name":window_name
-       "csound":csound
+       "window_name":window_name,
+       "csound":csound,
        "state":state,
        "buffsize":buffsize
        }
@@ -166,10 +166,11 @@ class MetricExtractor:
             self.operate()
 
 class FileMetricExtractor(MetricExtractor):
-    def __init__(self, filename):
+    def __init__(self, filename,buffsize=1024):
         self.filename_input = filename
         self.slices = []
-        self.setup()
+        self.buffsize = buffsize
+        self.setup()        
 
     def get_source(self):
         return "SoundFileSource/src"
@@ -178,7 +179,7 @@ class FileMetricExtractor(MetricExtractor):
         self.input_net.updControl(
             "SoundFileSource/src/mrs_string/filename",
             self.filename_input)
-        self.input_net.updControl("mrs_natural/inSamples", buffsize)
+        self.input_net.updControl("mrs_natural/inSamples", self.buffsize)
 
     def callback( self, input_net_end, stats):
 	stats = [x for x in stats]
@@ -189,15 +190,16 @@ class FileMetricExtractor(MetricExtractor):
         return self.slices
 
 class StreamMetricExtractor(MetricExtractor):
-    def __init__(self):
+    def __init__(self,buffsize=1024):
         self.slices = []
+        self.buffsize = buffsize
         self.setup()
 
     def get_source(self):
         return "AudioSource/src"
 
     def post_network_setup(self):
-        self.input_net.updControl("mrs_natural/inSamples", buffsize)
+        self.input_net.updControl("mrs_natural/inSamples", self.buffsize)
         self.input_net.updControl("mrs_real/israte", 44100.0)
 	self.input_net.updControl(self.get_source() + "/mrs_bool/initAudio", marsyas.MarControlPtr.from_bool(True));
 
@@ -211,12 +213,12 @@ class StreamMetricExtractor(MetricExtractor):
     #def get_slices( self ):
     #    return self.slices
     
-def read_in_file_with_stats(filename_input):
-    fm = FileMetricExtractor( filename_input )
+def read_in_file_with_stats(filename_input, buffsize=1024):
+    fm = FileMetricExtractor( filename_input, buffsize )
     fm.readeverything()
     return fm.get_slices()
 
-def make_output():
+def make_output(buffsize=1024):
     series = ["Series/output", 
               ["RealvecGrainSource/real_src",
                "AudioSink/dest"]]
@@ -371,7 +373,7 @@ class Mostitch:
 
     def load_file(self, filename_input ):
         warn("Opening "+filename_input)
-        newslices = read_in_file_with_stats( filename_input ) 
+        newslices = read_in_file_with_stats( filename_input, self.buffsize ) 
         self.slices += newslices
         self.slicecnt = len(self.slices)
         
@@ -396,7 +398,7 @@ class Mostitch:
         self.params = params
     
     def init_output_network(self):
-        output_net = make_output()
+        output_net = make_output(self.buffsize)
         slicecnt = 0
         for slice in self.slices:
             load_slice( output_net, slicecnt, slice )
@@ -479,7 +481,7 @@ class Mostitch:
 
 
     # run this if you are lazy
-    def mostitch_main(self, myfiles):
+    def mostitch_main(self, myfiles, window_name ="hann"):
         mostitch = self
         mostitch.load_files( myfiles )
         mostitch.set_window( window_name )
@@ -496,7 +498,7 @@ class CsoundMostich(Mostitch):
     def post_schedule_grain(self, delay, choice, amp ):
         depth = 512*(choice-1)/44100.0
         schedule[j*schedsize + 2] = amp
-        dur = buffsize/44100.0
+        dur = self.buffsize/44100.0
         when = (schedule[j*schedsize + 0])/44100.0
         print "i1 %f %f %f %f %d"%(when,dur,amp,depth,choice)
 
@@ -565,7 +567,7 @@ class CsoundMostich(Mostitch):
 def main():
     settings = parse_args()
     mostitch = Mostitch( settings["buffsize"], settings["state"] )
-    mostitch.mostitch_main( settings["files"] )
+    mostitch.mostitch_main( settings["files"], settings["window_name"] )
 
 if __name__ == "__main__":
     main()
