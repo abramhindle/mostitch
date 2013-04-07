@@ -337,12 +337,9 @@ class ZMQCommunicator:
         
     # mutates state
     def process_zmq(self, state):        
-        print "Process_zmq"
-        print str(state)
         events = self.poller.poll(timeout=0)
         socket = self.socket
         for x in events:
-            print str(x)
             if (zmq.POLLIN == x[1]):
                 newstate = socket.recv_pyobj()
                 for key in newstate:
@@ -382,6 +379,7 @@ class Mostitch:
         self.flann = FLANN()
         # state pattern
         self.set_chooser( BetaChooser() )
+        #self.set_chooser( Chooser() )
         self.set_delayer( Delayer() )
         self.zmq = ZMQCommunicator()
 
@@ -435,11 +433,15 @@ class Mostitch:
     def has_input(self):
         return self.sme.has_data()
 
-    def learn(self, slice):
+    # overload this if you don't want to use output_net
+    def load_slice(self, slice):
+        load_slice( self.output_net, self.slicecnt, slice )
+    
+    def learn(self, new_slice):
         self.slices.append(new_slice)
         self.flann.add_points(array([new_slice.stats]))
-        self.slicecnt = len(slices)
-        load_slice( output_net, slicecnt, new_slice )
+        self.slicecnt = len(self.slices)
+        self.load_slice( new_slice )
 
     def cond_learn(self, slice):
         if (self.state["learning"]):
@@ -473,11 +475,21 @@ class Mostitch:
         amp = random.random() * self.state["amp"]
         return amp
 
+    def schedule_and_play(self,schedule):
+        schedule_control = self.output_net.getControl(grainuri + "/mrs_realvec/schedule")
+        schedule_control.setValue_realvec(schedule)
+        self.output_net.updControl(grainuri + "/mrs_bool/schedcommit",
+                              marsyas.MarControlPtr.from_bool(True))        
+        self.output_net.tick()
+
+    def post_result_hook(self, result, dist):
+        None
     def step(self):
         state = self.state
         new_slice = self.sme.operate()
         results, dists = self.flann.nn_index(array([new_slice.stats]),state["topn"], checks=self.params["checks"]);
         result = results[0]
+        self.post_result_hook( result, dists[0] )
         self.cond_learn( new_slice )
         # here's the granular part
         ngrains = self.generate_ngrains()
@@ -492,11 +504,7 @@ class Mostitch:
             amp = self.generate_amp()
             schedule[j*schedsize + 2] = amp
             self.post_schedule_grain( delay, choice, amp )
-        schedule_control = self.output_net.getControl(grainuri + "/mrs_realvec/schedule")
-        schedule_control.setValue_realvec(schedule)
-        self.output_net.updControl(grainuri + "/mrs_bool/schedcommit",
-                              marsyas.MarControlPtr.from_bool(True))        
-        self.output_net.tick()
+        self.schedule_and_play( schedule )
 	self.process_zmq()
 
 
