@@ -44,6 +44,9 @@ import random
 import argparse
 import zmq
 
+def unbuffered_stdout():
+    sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Mostitch!')
     parser.add_argument('--buffsize', default=1024, help='Buffer Size')
