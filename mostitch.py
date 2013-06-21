@@ -47,7 +47,7 @@ import zmq
 def unbuffered_stdout():
     sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 
-def parse_args():
+def parse_args(add_args=None,add_settings=None):
     parser = argparse.ArgumentParser(description='Mostitch!')
     parser.add_argument('--buffsize', default=1024, help='Buffer Size')
     parser.add_argument('--csound', default=False, help='Print Csound Stuff')
@@ -58,6 +58,8 @@ def parse_args():
     parser.add_argument('--maxgrains', default=100, help='Maximum number of grains')
     parser.add_argument('--topn', default=20, help='Top N from NN')
     parser.add_argument('files', help='Filenames',nargs='+')
+    if (add_args!=None):
+        add_args(parser)
     args = parser.parse_args()
     buffsize = int(args.buffsize)
     csound = args.csound
@@ -83,6 +85,8 @@ def parse_args():
        "state":state,
        "buffsize":buffsize
        }
+    if (add_settings!=None):
+        add_settings(args,state,settings)
     return settings
 
 def dfl_state():
@@ -195,11 +199,14 @@ class FileMetricExtractor(MetricExtractor):
             "SoundFileSource/src/mrs_string/filename",
             self.filename_input)
         self.input_net.updControl("mrs_natural/inSamples", self.buffsize)
+        self.input_net.updControl("mrs_real/israte", 44100.0)
 
     def callback( self, input_net_end, stats):
 	stats = [x for x in stats]
 	rv = input_net_end.getSubVector(0,len(input_net_end))
+        s = Slice( rv, stats )
         self.slices.append( Slice( rv, stats ) )
+        return s
 
     def get_slices( self ):
         return self.slices
@@ -372,7 +379,7 @@ class BetaChooser:
         choice = int(result[ c ]) 
         return choice
 
-class Mostitch:
+class Mostitch(object):
     def __init__(self, buffsize = 1024, state = {}):
         self.buffsize = buffsize
         self.slices = []
@@ -384,11 +391,12 @@ class Mostitch:
         self.set_chooser( BetaChooser() )
         #self.set_chooser( Chooser() )
         self.set_delayer( Delayer() )
-        self.zmq = ZMQCommunicator()
-
+        self.zmq = self.make_zmq()
+        super(Mostitch, self).__init__()
     def set_chooser(self, chooser ):
         self.chooser = chooser
-
+    def make_zmq(self):
+        ZMQCommunicator()
     def set_delayer(self, delayer ):
         self.delayer = delayer
 

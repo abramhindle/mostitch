@@ -7,9 +7,13 @@ my $data = undef;
 }
 
 $| = 1;
+my $t;
 while(my $line = <STDIN>) {
     my @v = split(/\s+/,$line);
-    my $i = pop @v;
-    my @d = @{$data->[$i]};
-    print "i1 0 0.1 ".join(" ",@d[1..$#d]).$/;
+    my $i = $v[4];#pop @v;
+    $t = $v[1];
+    my @d = @{$data->[$i - 1]};
+    print "i1 $t 0.1 ".join(" ",@d[1..$#d]).$/;
 }
+$t = $t+1;
+print "i -555 $t 0$/";
