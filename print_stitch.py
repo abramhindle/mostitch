@@ -1,4 +1,5 @@
 from mostitch import *
+import sys
 
 class PrintStitch(Mostitch):
     def __init__(self, buffsize = 1024, state = {}):
@@ -51,8 +52,6 @@ def add_args(parser):
 def add_settings(args,state,settings):
     settings["input"] = args.input
 
-settings = parse_args(add_args, add_settings)
-# settings["state"]["learning"] = True
 
 def make_print_stitch(settings):
     if (settings["input"] == None):
@@ -60,7 +59,14 @@ def make_print_stitch(settings):
     else:
         return PrintStitchFromFile( settings["input"], settings["buffsize"], settings["state"])
 
-mostitch = make_print_stitch(settings)
-mostitch.mostitch_main( settings["files"], settings["window_name"] )
+def main():
+    settings = parse_args(add_args, add_settings)
+    # settings["state"]["learning"] = True
+    mostitch = make_print_stitch(settings)
+    mostitch.mostitch_main( settings["files"], settings["window_name"] )
 
+
+
+if __name__ == "__main__":
+   sys.exit(main())
 

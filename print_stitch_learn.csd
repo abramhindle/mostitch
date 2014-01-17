@@ -3,7 +3,7 @@
 ; Select audio/midi flags here according to platform
 ; Audio out   Audio in    No messages
 ; -L stdin -odac           -iadc     -dm6    ;;;RT audio I/O
-  -odac         -dm6  -+rtaudio=jack -+jack_client=csoundStitch  -b 1024 -B 2048   ;;;RT audio I/O
+  -odac           -+rtaudio=jack -+jack_client=csoundStitch  -b 1024 -B 2048   ;;;RT audio I/O
 ; For Non-realtime ouput leave only the line below:
 ; -o grain3.wav -W ;;; for file output any platform
 </CsOptions>
@@ -27,6 +27,9 @@ gklearndex init 0
 
 ilearninstr =  1
 iuselearndex = -1
+
+
+
 
 FLcolor	180,200,199
 FLpanel 	"Learn Box",200,200
@@ -66,11 +69,41 @@ itmp	ftgen 2, 0, 16384, 7, 1, 16384, -1
 /* sine */
 itmp	ftgen 4, 0, 16384, 10, 1
 
-itmp	ftgen 201, 0, 16384, 7, 1, 16384, 1
-itmp	ftgen 202, 0, 16384, 7, 1, 16384, 1
-itmp	ftgen 203, 0, 16384, 7, 1, 16384, 1
-itmp	ftgen 204, 0, 16384, 7, 1, 16384, 1
 
+itmp	ftgen 201, 0, 16384, 7, 0.1, 16384, 0.1
+itmp	ftgen 202, 0, 16384, 7, 0.1, 16384, 0.1
+;itmp	ftgen 203, 0, 16384, 7, 1, 16384, 1
+;itmp	ftgen 204, 0, 16384, 7, 1, 16384, 1
+; exponentials
+itemp ftgen 201, 0, 16384, -21, 4, 4
+itemp ftgen 202, 0, 16384, -21, 4, 0.5
+itemp ftgen 203, 0, 16384, -21, 4, 1000
+itemp ftgen 204, 0, 16384, -21, 4, 17
+;itmp	ftgen 203, 0, 16384, -25, 0, 1000, 16384, 40
+;itmp	ftgen 204, 0, 16384, -25, 0, 200, 16384, 0.1
+;itmp	ftgen 203, 0, 4096, -9,    1, 1, 0,        2, 0.5, 0,     4, 0.25, 0,   8, 0.125, 0,  16, 0.0625, 0,  32, 0.3125, 0,   64, 0.015625, 0
+;itmp	ftgen 204, 0, 4096, 9,    1, 1, 0,        2, 0.5, 0,     4, 0.25, 0,   8, 0.125, 0,  16, 0.0625, 0,  32, 0.3125, 0,   64, 0.015625, 0
+
+gisintbl = 101
+girisetbl = 102
+gisheptbl = 103
+gisquaretbl = 104
+gisawtbl = 105
+
+; plain old sine wave
+itmp ftgen gisintbl, 0, 4096, 10,   1
+
+; sinusoidal rise shape for granular synthesis
+itmp ftgen girisetbl, 0, 1024, 19,   0.5, 0.5, 270, 0.5
+
+; Shepardesque tone:  octaves with exponential dropoff
+itmp ftgen gisheptbl, 0, 4096, 9,    1, 1, 0,        2, 1/2, 0,     4, 1/4, 0,   8, 1/8, 0, 16, 1/16, 0,  32, 1/32, 0,   64, 1/64, 0
+
+; square wave (rise/fall limited a little)
+itmp ftgen gisquaretbl, 0, 1024, 7,   0, 10, 1, 492, 1, 20, -1, 492, -1, 10, 0
+
+; nice sharp sawtooth
+itmp ftgen gisawtbl, 0, 1024, 7,   -1, 1024, 1
 
 instr 1
       idur = p3
@@ -111,6 +144,15 @@ aa01     oscili gkamp1, gkhz1, 2
 aa02     oscili gkamp2, gkhz2, 4
 aout     = aa01 * aa02 - 0.01 * aa01 - 0.01 * aa02 
          out aout * gkamp
+endin
+
+instr Pad
+
+a1 oscili gkamp1,gkhz1,gisawtbl,rnd(1)
+a3 oscili gkamp2*0.20,32768/gkhz1,gisquaretbl,rnd(1)
+a2 lowpass2 a1+a3,gkhz2,2
+out gkamp*10000*a2
+
 endin
 
 instr Volume
@@ -163,7 +205,8 @@ endin
 t 0 60
 ;f 0 3600
 ;i3 0 38
-i3 0 3600
+;i3 0 3600
+i"Pad" 0 3600
 
 ;i"Play" 0 1 0
 ;i"Learn" 0 1 1

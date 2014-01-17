@@ -396,7 +396,7 @@ class Mostitch(object):
     def set_chooser(self, chooser ):
         self.chooser = chooser
     def make_zmq(self):
-        ZMQCommunicator()
+        return ZMQCommunicator()
     def set_delayer(self, delayer ):
         self.delayer = delayer
 
@@ -498,7 +498,7 @@ class Mostitch(object):
     def step(self):
         state = self.state
         new_slice = self.sme.operate()
-        results, dists = self.flann.nn_index(array([new_slice.stats]),state["topn"], checks=self.params["checks"]);
+        results, dists = self.flann.nn_index(array([new_slice.stats]),int(state["topn"]), checks=self.params["checks"]);
         result = results[0]
         self.post_result_hook( result, dists[0] )
         self.cond_learn( new_slice )
